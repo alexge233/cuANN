@@ -18,16 +18,19 @@ set(LIBRARY_PATH ${LIBRARY_PATH}
 # Include path
 set(INCLUDE_HEADERS ${INCLUDE_HEADERS}
                     /usr/local/include
-                    /usr/include)
+                    /usr/include
+                    )
 
 # Ignore warnings from includes
 include_directories(SYSTEM ${INCLUDE_HEADERS})
+include_directories(${SRC}/)
 
 # Use custom Modules
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR})
 
 # Older versions of NVCC do not support shared libs
-set(BUILD_SHARED_LIBS OFF)
+# Build Shared (so) unless you want a static version for some reason
+set(BUILD_SHARED_LIBS ON)
 
 # packages
 find_package(CUDA REQUIRED)
@@ -38,22 +41,25 @@ set(CUDA_ATTACH_VS_BUILD_RULE_TO_CUDA_FILE ON)
 
 # nvcc flags
 set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-gencode arch=compute_20,code=sm_20
-                                       -gencode arch=compute_20,code=sm_21
-                                       -gencode arch=compute_21,code=sm_21)
+                                       -gencode arch=compute_20,code=sm_21;
+                                       -std=c++11;)
+                                       #-gencode arch=compute_21,code=sm_21)
 
 add_subdirectory(${SRC})
 add_subdirectory(${SAMPLES})
 
-# The commands below will compile a cuda executable
-#cuda_compile(HELPER_O helper.cu)
-#cuda_compile(DRIVER_O driver.cu OPTIONS -G)
-#cuda_add_executable(driver ${HELPER_O} ${DRIVER_O})
-
-# But we want to create a Library first!
+# Build the library
 cuda_add_library(cuANN
                 ${SRC}/ann/ann.cu
                 )
 
 # Then we may build the samples
 
+# The commands below will compile a cuda executable
+# Use them to compile the SAMPLES
+#cuda_compile(ANN_O .cu)
+#cuda_compile(DRIVER_O driver.cu OPTIONS -G)
+#cuda_add_executable(driver ${HELPER_O} ${DRIVER_O})
+
 # and Finally, define the install location
+

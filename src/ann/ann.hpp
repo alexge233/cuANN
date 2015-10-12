@@ -1,7 +1,6 @@
 #ifndef _cuANN_ann_HPP_
 #define _cuANN_ann_HPP_
-#include "Includes.hxx"
-
+#include "includes.ihh"
 namespace cuANN
 {
 /**
@@ -11,10 +10,13 @@ namespace cuANN
  * @author Alex Giokas <alexge233@hotmail.com>
  * @version 1
  */
-template <class NumType> class ann : public network
+class ann
 {
 public:
 
+    /**
+     *
+     */
     ann ( 
             const unsigned int input_neurons,
             const unsigned int hidden_neurons,
@@ -23,39 +25,45 @@ public:
         );
 
     /**
-     * @param train_set contains the training data
-     * @param cross_set contains another sample of data used for cross-validation (Early Stopping)
+     * @brief This is a Training Epoch (a full iteration of the data)
+     * @note  Uses the Batch Training MSE, not incremental
+     * @return Mean-Squared Error
      */
-    NumType train ( 
-                    const cuANN::train_data & train_set,
-                    const cuANN::validation_data & cross_set
-                  );
+    float epoch (
+                    const cuANN::data & input,
+                    const float stop_error,
+                    const float alpha
+                );
 
     /**
-     * @param test_input will propagate the input and produce output
      * @return a vector of output the size of ann.output_neurons
-     * TODO: maybe pass Activation Function as parameter?
      */
-    thrust::host_vector<NumType> test ( const cuANN::test_data & test_input );
+    thrust::host_vector<float> test ( thrust::host_vector<float> test_input );
 
 private:
 
-    /// Activation Function
-    NumType sigmoid ( const NumType input );
+    /// Sigmoid Activation Function
+    __device__ __host__ float sigmoid__ ( const float x ) const;
+
+    /// Fast Sigmoid Activation Function
+    __device__ __host__ float fast_sigmoid__ ( const float x ) const;
+
+    /// Pseudo-Random Number Generator 
+    __device__ __host__ float prng__ (
+                                        const float min,
+                                        const float max
+                                     ) const;
+
 
 
     unsigned int layers_num__;
-
     unsigned int input_neurons__;
-
     unsigned int hidden_neurons__;
-
     unsigned int output_neurons__;
-
-    NumType learning_rate__;
+    float learning_rate__;
 
     /// Network Layers
-    thrust::device_vector<NumType> layers;
+    thrust::device_vector<float> layers;
 
     // Our Weights
     //     ...
@@ -63,10 +71,5 @@ private:
     //     Bias Neurons
     //     ...
 };
-
-//NOTE: Because this is a template class, and because the implementation is in a cubin
-//      We have to include the cubin FROM the HPP header, and not the other way around
-#include "ann.cu"
-
 }
 #endif
