@@ -15,14 +15,13 @@ class ann
 public:
 
     /**
-     *
+     * Construct a new ANN
+     * @param input_neurons must match your input data
      */
-    ann ( 
-            const unsigned int input_neurons,
-            const unsigned int hidden_neurons,
-            const unsigned int hidden_layers,
-            const unsigned int output_neurons
-        );
+    ann ( );
+
+    /// TODO: Load a network from a serialised file
+    ann ( const std::string filename );
 
     /**
      * @brief This is a Training Epoch (a full iteration of the data)
@@ -36,40 +35,40 @@ public:
                 );
 
     /**
+     * @brief Propagate the input through the network, and get an output
      * @return a vector of output the size of ann.output_neurons
      */
-    thrust::host_vector<float> test ( thrust::host_vector<float> test_input );
+    thrust::host_vector<float> prop ( thrust::host_vector<float> test_input );
 
 private:
 
-    /// Sigmoid Activation Function
+    /// Sigmoid Activation Function: TODO Move to another struct
     __device__ __host__ float sigmoid__ ( const float x ) const;
 
-    /// Fast Sigmoid Activation Function
+    /// Fast Sigmoid Activation Function: TODO Move to another struct
     __device__ __host__ float fast_sigmoid__ ( const float x ) const;
 
-    /// Pseudo-Random Number Generator 
-    __device__ __host__ float prng__ (
-                                        const float min,
-                                        const float max
-                                     ) const;
 
 
-
-    unsigned int layers_num__;
-    unsigned int input_neurons__;
-    unsigned int hidden_neurons__;
-    unsigned int output_neurons__;
+    /// Setup the Network here - directly change the settings
+    unsigned int input_neurons__ = 2;
+    unsigned int hidden_neurons__ = 2;
+    unsigned int output_neurons__ = 1;
     float learning_rate__;
 
-    /// Network Layers
-    thrust::device_vector<float> layers;
+    /// Input Layer
+    thrust::device_vector<float> input__;
 
-    // Our Weights
-    //     ...
-    //     TODO...
-    //     Bias Neurons
-    //     ...
+    /// Hidden Layer
+    thrust::device_vector<float> hidden__;
+
+    // NOTE: If using many hidden layers, or if we parametrise
+    // std::vector<thrust::device_vector<float>> hidden__;
+
+    /// Output Layer
+    thrust::device_vector<float> output__;
+
+    // Bias Neurons ?
 };
 }
 #endif
