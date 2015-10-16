@@ -33,8 +33,8 @@ set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR})
 set(BUILD_SHARED_LIBS ON)
 
 # packages
-find_package(CUDA REQUIRED)
-find_package(Thrust REQUIRED)
+find_package(CUDA 6.5 REQUIRED )
+find_package(Thrust 1.7.2 REQUIRED)
 
 # What does this line do ?
 set(CUDA_ATTACH_VS_BUILD_RULE_TO_CUDA_FILE ON)
@@ -53,6 +53,7 @@ add_subdirectory(${SAMPLES})
 cuda_add_library(cuANN
                 ${SRC}/ann/ann.cu
                 ${SRC}/prg/prg.cu
+                ${SRC}/sigmoid/sigmoid.cu
                 )
 
 # Then we may build the samples

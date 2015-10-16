@@ -20,9 +20,6 @@ public:
      */
     ann ( );
 
-    /// TODO: Load a network from a serialised file
-    ann ( const std::string filename );
-
     /**
      * @brief This is a Training Epoch (a full iteration of the data)
      * @note  Uses the Batch Training MSE, not incremental
@@ -50,7 +47,8 @@ private:
 
 
 
-    /// Setup the Network here - directly change the settings
+    /// Setup the Network here
+    //  TODO: 0.2 version will be parametrised
     unsigned int input_neurons__ = 2;
     unsigned int hidden_neurons__ = 2;
     unsigned int output_neurons__ = 1;

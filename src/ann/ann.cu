@@ -51,20 +51,4 @@ __host__ float ann::epoch (
     return 0.f;
 }
 
-__host__ thrust::host_vector<float> prop ( thrust::host_vector<float> test_input )
-{
-    // TODO: propagate values, by activating each neuron/layer and calculate output
-    //       then return that output back
-}
-
-__device__ __host__ __forceinline__ float ann::sigmoid__ ( const float x ) const
-{
-    return 1.0 / (1.0 + exp ( -x ) );
-}
-
-__device__ __host__ __forceinline__ float ann::fast_sigmoid__ ( const float x ) const
-{
-    return x / ( 1 + abs( x ) );
-}
-
 };
