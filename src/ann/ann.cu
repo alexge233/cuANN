@@ -99,10 +99,13 @@ __host__ ann::h_vector ann::propagate ( ann::d_vector input ) const
             // copy as tmp hidden weight vector
             thrust::device_vector<float> hidden( w_hidden_.begin() + start, 
                                                  w_hidden_.begin() + end );
-   
             //std::cout << "hidden layer size: " << hidden.size() << std::endl;
  
             // run propagation through that hidden layer
+            // NOTE:
+            //      alternatively, in ordfer to avoid copying by iterators
+            //      I can change the params of ann::prop_layer, to use Iterators
+            //      This would be an overloaded method, used only for hidden layers
             out = prop_layer( hidden, out );
         }
 
@@ -125,7 +128,7 @@ __host__ ann::h_vector ann::propagate ( ann::d_vector input ) const
 
 
 __host__ ann::d_vector ann::prop_layer ( 
-                                            ann::d_vector weights, 
+                                            ann::d_vector weights,
                                             ann::d_vector input
                                        ) const
 {
@@ -142,7 +145,6 @@ __host__ ann::d_vector ann::prop_layer (
 
     // Calculate block theads and block number: @see cuANN::dim_find
     auto dm = dim_find_2d( weights.size(), input.size() );
-
     //std::cout << "thread_blocks_x: " << dm.thread_blocks_x << " & thread_blocks_y: " << dm.thread_blocks_y << std::endl;
     //std::cout << "num_blocks_x: " << dm.num_blocks_x << " & num_blocks_y: " << dm.num_blocks_y << std::endl;
 
@@ -163,13 +165,15 @@ __host__ ann::d_vector ann::prop_layer (
         unsigned int start = i * input.size();
         unsigned int end = ( i * input.size() ) + (input.size());
         //std::cout << "prop_layer row start: " << start << " & end: " << end << std::endl;
+        //thrust::device_vector<float> row ( mtx_output.begin() + start, mtx_output.begin() + end );
+        //std::cout << "matrix row size: " << row.size() << std::endl;
 
-        // tmp copy by assignment
-        thrust::device_vector<float> tmp( mtx_output.begin() + start, mtx_output.begin() + end );
-        //std::cout << "prop_layer tmp row size: " << tmp.size() << std::endl;
-        
         // get the sum
-        float sum = thrust::reduce( tmp.begin(), tmp.end(), (float)0, thrust::plus<float>() );
+        //float sum = thrust::reduce( row.begin(), row.end(), (float)0, thrust::plus<float>() );
+        float sum = thrust::reduce( mtx_output.begin() + start, 
+                                    mtx_output.begin() + end, 
+                                    (float)0, 
+                                    thrust::plus<float>() );
 
         // Sigmoid and set
         output[i] = sigmoid( sum );
