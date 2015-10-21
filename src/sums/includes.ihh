@@ -4,16 +4,9 @@
 
 #include <vector>
 #include <cmath>
-#include <iostream>
-#include <chrono>
-#include <ctime>
 
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/counting_iterator.h>
 
 #include "data/data.hpp"
-#include "dim_find/dim_find.hpp"
-#include "sigmoid/sigmoid.hpp"
 #include "prg/prg.cu"
-#include "prop/prop.hpp"

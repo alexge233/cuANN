@@ -1,32 +1,15 @@
-#ifndef _cuANN_sigmoid_HPP_
-#define _cuANN_sigmoid_HPP_
-#include "includes.ihh"
+#include "sigmoid.hpp"
 namespace cuANN
 {
 
-/// Sigmoid Activation Function
-struct sigmoid
+ __host__ __device__ float sigmoid ( const float x )
 {
-    sigmoid () = default;
+    return 1.0 / (1.0 + exp ( -x ) );
+}
 
-     __host__ __device__ __forceinline__ float operator()( const float x ) const
-    {
-        return 1.0 / (1.0 + exp ( -x ) );
-    }
-
-};
-
-/// Fast Sigmoid Activation Function
-struct fast_sigmoid
+__host__ __device__ float fast_sigmoid ( const float x )
 {
-    fast_sigmoid() = default;
-
-    __host__ __device__ __forceinline__ float operator()( const float x ) const
-    {
-        return x / ( 1 + abs( x ) );
-    }
-
-};
+    return x / ( 1 + abs( x ) );
+}
 
 }
-#endif

@@ -54,6 +54,7 @@ cuda_add_library(cuANN
                 ${SRC}/ann/ann.cu
                 ${SRC}/prg/prg.cu
                 ${SRC}/sigmoid/sigmoid.cu
+                ${SRC}/prop/prop.cu
                 )
 
 # Then we may build the samples
