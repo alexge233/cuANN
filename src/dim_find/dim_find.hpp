@@ -45,8 +45,5 @@ struct dim_find_2d
     }
 };
 
-/// Find dimensions for grid, blocks and threads using 1D
-// TODO
-
 }
 #endif

@@ -14,6 +14,6 @@
 
 #include "data/data.hpp"
 #include "dim_find/dim_find.hpp"
-#include "sigmoid/sigmoid.hpp"
+#include "activation/activation.hpp"
 #include "prg/prg.cu"
 #include "prop/prop.hpp"

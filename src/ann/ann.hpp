@@ -9,6 +9,8 @@ namespace cuANN
  * @date 6th October 2015
  * @author Alex Giokas <alexge233@hotmail.com>
  * @version 1
+ *
+ * TODO: ann must be (de)serialisable
  */
 class ann
 {
@@ -31,15 +33,15 @@ public:
         );
 
     /**
-     * @brief This is a Training Epoch (a full iteration of the data)
+     * @brief This is a Training Epoch (an iteration of the data)
      * @note  Uses the Batch Training MSE, not incremental
      * @return Mean-Squared Error
      */
-    //float epoch (
-    //                const cuANN::data & input,
-    //                const float stop_error,
-    //                const float alpha
-    //            );
+    float epoch (
+                    const cuANN::data & input,
+                    const float stop_error,
+                    const float alpha
+                );
 
     /**
      * @brief Propagate the input through the network, and get an output
@@ -49,25 +51,27 @@ public:
 
 private:
 
-    /// Propagate input through a single layer 
+    /// Propagate input through a single layer
+    /// @param activaction_func may be a sigmoid, tahn, etc.
     d_vector prop_layer (
                           d_vector weights,
-                          d_vector input
+                          d_vector input,
+                          std::function<float(float)> activation_func
                         ) const;
 
     // TODO: Calculate MSE / RMSE and create all training methods needed
+    //
 
-
-    unsigned int input_;
-    unsigned int hidden_;
-    unsigned int output_;
-    unsigned int layers_;
+    unsigned int input_neurons_;
+    unsigned int hidden_neurons_;
+    unsigned int output_neurons_;
+    unsigned int hidden_layers_;
     unsigned int per_layer_;
 
     float learning_rate_;
 
     /// Input Weights
-    thrust::device_vector<float> w_input_;
+    thrust::device_vector<float> weights_input_;
 
     /// Hidden Weights - WARNING: This is a vectorised Matrix!
     ///                - If more than one hidden layer is given
@@ -75,10 +79,8 @@ private:
     ///                - in blocks of `layers_`, e.g.: 
     ///                -    first hidden vector weights will be from [0]-[per_layer_]_,
     ///                -    second hidden vector weights will be from [per_layer_] - [2 * per_layer_]
-    thrust::device_vector<float> w_hidden_;
-
-    /// Output Layer
-    thrust::device_vector<float> w_output_;
+    ///                -    Furthermore, within a layer, they go as: [H1W2],[H2W2],etc.
+    thrust::device_vector<float> weights_hidden_;
 
 };
 }

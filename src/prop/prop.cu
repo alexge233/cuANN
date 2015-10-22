@@ -1,26 +1,6 @@
 #include "prop.hpp"
 namespace cuANN
 {
-__global__ void prop_vector ( 
-                               float * weight, 
-                               float * input, 
-                               float * output, 
-                               unsigned int size 
-                            )
-{ 
-    float sum = 0;
-
-    for ( int i = 0; i < size; i++ )
-    {   
-        sum += weight[threadIdx.x] * input[i];
-    }   
-    
-    // Sigmoid
-    output[threadIdx.x] = 1.0 / (1.0 + exp ( -sum ) );
-
-    // Fast Sigmoid
-    //output[threadIdx.x] = sum / ( 1 + abs( sum ) );
-}
 
 __global__ void prop_matrix ( 
                               float * weight, 
@@ -34,9 +14,17 @@ __global__ void prop_matrix (
     int y = blockIdx.y * blockDim.y + threadIdx.y;
 
     // ensure that thread x and y is within bounds
-    if ( ( x < w_size ) && ( y < i_size ) )
+    if ( ( x < i_size ) && ( y < w_size ) )
     {
-        output[y + x * i_size] = weight[x] * input[y];
+        // Input i, is at Grid X
+        float in_i = input[x];
+
+        // Weight for Input i, is at grid X * weight size + Y index
+        // where Y indexes the weights.
+        float w_i = weight[w_size * x + y];
+
+        // Output is a simple multiplication
+        output[w_size * x + y] = in_i * w_i;
     }
 }
 

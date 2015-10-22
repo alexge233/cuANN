@@ -1,4 +1,6 @@
 # cuANN
+THIS IS WORK IN PROGRESS - STILL INCOMPLETE - PLZ COME BACK LATER
+
 Artificial Neural Network for CUDA
 
 A simple Feed Forward Multilayered Neural Network, using CUDA and Thrust.
@@ -26,4 +28,4 @@ Thrust >= 1.7
 CMake >= 2.8
 g++   >= 4.8
 
-cuANN uses C++11 features, and will soon support serialisation by Boost.
+cuANN uses C++11 features

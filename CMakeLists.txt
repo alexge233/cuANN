@@ -51,7 +51,7 @@ add_subdirectory(${SAMPLES})
 cuda_add_library(cuANN
                 ${SRC}/ann/ann.cu
                 ${SRC}/prg/prg.cu
-                ${SRC}/sigmoid/sigmoid.cu
+                ${SRC}/activation/activation.cu
                 ${SRC}/prop/prop.cu
                 ${SRC}/data/data.cu
                 )
@@ -60,9 +60,12 @@ cuda_add_library(cuANN
 
 # The commands below will compile a cuda executable
 cuda_compile(XOR_O ${SAMPLES}/xor.cu)
-#cuda_compile(DRIVER_O driver.cu OPTIONS -G)
-
 cuda_add_executable(xor ${XOR_O})
 target_link_libraries(xor cuANN)
+
+cuda_compile(LNET_O ${SAMPLES}/test.cu)
+cuda_add_executable(lnet ${LNET_O})
+target_link_libraries(lnet cuANN)
+
 
 # and Finally, define the install location
