@@ -49,23 +49,31 @@ add_subdirectory(${SAMPLES})
 
 # Build the library
 cuda_add_library(cuANN
-                ${SRC}/ann/ann.cu
-                ${SRC}/prg/prg.cu
                 ${SRC}/activation/activation.cu
-                ${SRC}/prop/prop.cu
+                ${SRC}/ann/ann.cu
+                ${SRC}/error/error.cu
+                ${SRC}/prg/prg.cu
                 ${SRC}/data/data.cu
+                ${SRC}/prop/prop.cu
+                ${SRC}/sums/sums.cu
                 )
 
 # Then we may build the samples
 
-# The commands below will compile a cuda executable
+# the XOR Sample
 cuda_compile(XOR_O ${SAMPLES}/xor.cu)
 cuda_add_executable(xor ${XOR_O})
 target_link_libraries(xor cuANN)
 
+# the Testing Sample
 cuda_compile(LNET_O ${SAMPLES}/test.cu)
 cuda_add_executable(lnet ${LNET_O})
 target_link_libraries(lnet cuANN)
+
+# Abelone Sample
+cuda_compile(ABEL_O ${SAMPLES}/abelone.cu)
+cuda_add_executable(abelone ${ABEL_O})
+target_link_libraries(abelone cuANN)
 
 
 # and Finally, define the install location

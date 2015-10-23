@@ -6,6 +6,9 @@ namespace cuANN
 
 /**
  * @brief a Simple Struct to wrap around an input-output pair
+ * NOTE - One bottle-neck is that row uses a host_vector
+ *        If only I could load all training data to the device
+ *        and keep it there for good.
  */
 struct row
 {
@@ -32,17 +35,25 @@ struct row
 class data
 {
 public:
+   
+    /// No empty constructor
+    data ( ) = delete;
 
-    //typedef std::pair < thrust::host_vector<float>,
-    //                    thrust::host_vector<float> > row;
-
-    data ( ) = default;
-
+    /// Load data from disk
     data ( const std::string filename );
 
-    // TODO: save to file
+    /// Get the data size
+    int size() const;
 
-    // TODO: host_vector to device_vector copying as an operator would be nice
+    /// Expose const iterators to our data's rows
+    using const_iterator = std::vector<row>::const_iterator;
+
+    const_iterator begin() const;
+
+    const_iterator end() const;
+
+    /// TODO: I need a way to load all rows into device memory
+    ///       and keep them there during training
 
 private:
 

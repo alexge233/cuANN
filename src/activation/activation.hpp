@@ -13,5 +13,8 @@ __host__ __device__ float fast_sigmoid ( const float x );
 /// Hyperbolic Tangent
 __host__ __device__ float tanh_func ( const float x );
 
+/// Sigmoid Activation Kernel
+__global__ void sigmoid_kernel( float * input, unsigned int size );
+
 }
 #endif

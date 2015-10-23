@@ -81,4 +81,20 @@ data::data ( const std::string filename )
     */
 }
 
+int data::size() const
+{
+    return rows_.size();
+}
+
+data::const_iterator data::begin() const
+{
+    return rows_.begin();
+}
+
+data::const_iterator data::end() const
+{
+    return rows_.end();
+}
+
+
 }

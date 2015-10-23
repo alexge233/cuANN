@@ -2,5 +2,6 @@
 #include <sstream>
 #include <iterator>
 #include <fstream>
+#include <algorithm>
 
 #include <thrust/host_vector.h>

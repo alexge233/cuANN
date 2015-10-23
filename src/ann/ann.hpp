@@ -33,16 +33,20 @@ public:
         );
 
     /**
-     * @brief This is a Training Epoch (an iteration of the data)
-     * @note  Uses the Batch Training MSE, not incremental
-     * @return Mean-Squared Error
+     * @brief Train the Network using the training data
+     * @param mse_stop will stop training if that MSE is achieved
+     * @param epochs denotes for how many epochs will the network be trained
+     * @param learning denotes the learning rate of the Gradient Descent
+     * @param momentum is the momentum used to affect previous Gradients
      */
-    float epoch (
-                    const cuANN::data & input,
-                    const float stop_error,
-                    const float alpha
+    float train (
+                  const cuANN::data & input,
+                  float mse_stop,
+                  unsigned int epochs,
+                  float learning,
+                  float momentum
                 );
-
+    
     /**
      * @brief Propagate the input through the network, and get an output
      * @return a vector of output the size of ann.output_neurons
@@ -51,24 +55,50 @@ public:
 
 private:
 
+    /**
+     * @brief This is a Training Epoch (an iteration of the data)
+     * @note  Uses the Batch Training MSE, not incremental
+     * @return Mean-Squared Error
+     */
+    float epoch ( const cuANN::data & input );
+
+
     /// Propagate input through a single layer
     /// @param activaction_func may be a sigmoid, tahn, etc.
     d_vector prop_layer (
                           d_vector weights,
-                          d_vector input,
-                          std::function<float(float)> activation_func
+                          d_vector input
                         ) const;
 
-    // TODO: Calculate MSE / RMSE and create all training methods needed
-    //
+    /// Calculate Output's Squared Errors
+    /// @param ideal output will be compared to @param actual and error is squared
+    d_vector output_errors (
+                               d_vector ideal,
+                               d_vector actual
+                            ) const;
 
+    /// Calculate all gradient descents for all weights
+    d_vector gradient_descent (
+                               // ???
+                              );
+
+    /// Back-Propagate for a Batch
+    void back_prop_batch (
+                            // ???
+                         );
+
+    /// Back-Propagate Online (for all Gradients)
+    void back_prop_online (
+                            // ???
+                          );
+
+
+    // ANN Private Vars
     unsigned int input_neurons_;
     unsigned int hidden_neurons_;
     unsigned int output_neurons_;
     unsigned int hidden_layers_;
     unsigned int per_layer_;
-
-    float learning_rate_;
 
     /// Input Weights
     thrust::device_vector<float> weights_input_;

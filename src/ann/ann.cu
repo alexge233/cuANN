@@ -38,8 +38,8 @@ __host__ ann::ann (
         weights_input_ = thrust::device_vector<float>( input_neurons_ * output_neurons );
    
     // low and upper random bounds
-    float upper = .1f;
-    float lower = -.1f;
+    float upper = .2f;
+    float lower = -.2f;
 
     thrust::counting_iterator<float> index_sequence_begin(0);
     auto now = std::chrono::system_clock::now();
@@ -72,6 +72,21 @@ __host__ ann::ann (
 }
 
 
+__host__ float ann::train (
+                              const cuANN::data & input,
+                              float mse_stop,
+                              unsigned int epochs,
+                              float learning,
+                              float momentum
+                          )
+{
+    // Run epoch iterations, doing a back_propagation
+    // after each iteration
+    // Stop only if mse_stop is achieved, or if we run out of epochs
+    // TODO...
+    return -1.f;
+}
+
 __host__ ann::h_vector ann::propagate ( ann::d_vector input ) const
 {
     if ( input.size() != input_neurons_ )
@@ -81,56 +96,70 @@ __host__ ann::h_vector ann::propagate ( ann::d_vector input ) const
     //       at any point where I have the vector `out` simply add at the end, a `1.f` value
 
     // put it through the input weights
-    thrust::device_vector<float> out = prop_layer( weights_input_, input, cuANN::sigmoid_func );
+    thrust::device_vector<float> out = prop_layer( weights_input_, input );
 
-    // if we do have hidden neurons
-    if ( hidden_neurons_ > 0 )
+    for ( int i = 0; i < hidden_layers_; i++ )
     {
-        for ( int i = 0; i < hidden_layers_; i++ )
+        // increment by layer's full connections
+        int h_w = std::pow( per_layer_, 2 );
+        // find current position
+        unsigned int k = i * h_w;
+        // find how many weights are left
+        unsigned int left = weights_hidden_.size() - k;
+
+        // enough weights left - send the block for this layer
+        if ( left >= h_w )
         {
-            // increment by layer's full connections
-            int h_w = std::pow( per_layer_, 2 );
-            // find current position
-            unsigned int k = i * h_w;
-            // find how many weights are left
-            unsigned int left = weights_hidden_.size() - k;
-            // enough weights left - send the block for this layer
-            if ( left >= h_w )
-            {
-                thrust::device_vector<float> hidden( weights_hidden_.begin() + k, 
-                                                     weights_hidden_.begin() + (k + h_w) );
-                out = prop_layer( hidden, out, cuANN::sigmoid_func );
-            }
-            // not enough weights left - send whatever weights we have left, they are the last
-            // connecting to the output neurons
-            else
-            {
-                thrust::device_vector<float> hidden( weights_hidden_.begin() + k, 
-                                                     weights_hidden_.end() );
-                out = prop_layer( hidden, out, cuANN::sigmoid_func );
-            }
+            thrust::device_vector<float> hidden( weights_hidden_.begin() + k, 
+                                                 weights_hidden_.begin() + (k + h_w) );
+            out = prop_layer( hidden, out );
+        }
+        // not enough weights left - send whatever weights we have left, they are the last
+        // connecting to the output neurons
+        else
+        {
+            thrust::device_vector<float> hidden( weights_hidden_.begin() + k, 
+                                                 weights_hidden_.end() );
+            out = prop_layer( hidden, out );
         }
     }
+
     return out;
 }
 
 
-__host__ float ann::epoch (
-                                const cuANN::data & input,
-                                const float stop_error,
-                                const float alpha
-                            )
+__host__ float ann::epoch ( const cuANN::data & input )
 {
-    // TODO: run an epoch: update all weights, calculate MSE (batch)
-    //       then see if its less than stop error
-    return 0.f;
+    // Accumulate squared errors
+    thrust::host_vector<float> errors( input.size() );
+
+    //  Iterate input - 
+    //  NOTE: Iterating host_vectors from training data requires a lot of copying here
+    //  I think its best if the input param, was a vector of pairs with device_vectors
+    //  Since its simply stupid loading them from host to device at every iteration
+    for ( auto & row : input )
+    {
+        // Propagate input - get output (WARNING: copying from host to device)
+        thrust::device_vector<float> output = propagate( row.input );
+
+        // get squared errors - (WARNING: copying from host to device)
+        thrust::device_vector<float> sq_errors = output_errors( row.output, output );
+
+        // sum up square errors for this input - push it back
+        float sum_errors = thrust::reduce( sq_errors.begin(), sq_errors.end() );
+        errors.push_back( sum_errors );
+    }
+    // sum all errors
+    float num_errors = errors.size();
+    float sum_errors = thrust::reduce( errors.begin(), errors.end() );
+
+    return sum_errors  / num_errors;
 }
 
 
 __host__ ann::d_vector ann::prop_layer ( 
                                             ann::d_vector weights,
-                                            ann::d_vector input,
-                                            std::function<float(float)> activation_func
+                                            ann::d_vector input
                                        ) const
 {
     unsigned int w_per_i = weights.size() / input.size();
@@ -138,55 +167,90 @@ __host__ ann::d_vector ann::prop_layer (
     thrust::device_vector<float> mtx_output( weights.size() );
 
     // Get raw pointers for CUDA kernel
-    float * i_ptr = thrust::raw_pointer_cast( input.data() );
-    float * w_ptr = thrust::raw_pointer_cast( weights.data() );
-    float * o_ptr = thrust::raw_pointer_cast( mtx_output.data() );
+    float * inputs_ptr = thrust::raw_pointer_cast( input.data() );
+    float * weights_ptr = thrust::raw_pointer_cast( weights.data() );
+    float * mtx_ptr = thrust::raw_pointer_cast( mtx_output.data() );
 
     // Calculate block theads and block number
     // Our X grid, is the Input size, our Y grid, is the number of weights per Input
-    auto dm = dim_find_2d( input.size(), w_per_i );
+    auto dm_a = dim_find_prop_mtx( input.size(), w_per_i );
 
     // set the threads per block and number of blocks
-    dim3 threadsPerBlock( dm.thread_blocks_x, dm.thread_blocks_y );
-    dim3 numBlocks( dm.num_blocks_x, dm.num_blocks_y );
+    dim3 tPb1( dm_a.block_threads_x, dm_a.block_threads_y );
+    dim3 nB1( dm_a.num_blocks_x, dm_a.num_blocks_y );
 
     // Multiply Each Input, with its Row of Weights (Matrix of Weights) resulting in a Matrix of Sums (per Input/Row)
-    prop_matrix<<<numBlocks,threadsPerBlock>>>( w_ptr, i_ptr, o_ptr, w_per_i, input.size() );
+    // This is a 2D Grid iterations, using as input Weights and Inputs, and the Matrix as output
+    // Width (Columns) is # weights per input, Height (Rows) is # inputs
+    prop_matrix<<<nB1,tPb1>>>( weights_ptr, inputs_ptr, mtx_ptr, w_per_i, input.size() );
 
-    // USED ONLY FOR TESTING THE PROPAGATION !!!
-    thrust::device_vector<float> output ( input.size() );
-    thrust::fill( output.begin(), output.end(), 1.f);
+    // Sums Row vector
+    thrust::device_vector<float> sums ( w_per_i );
+    float * sums_ptr = thrust::raw_pointer_cast( sums.data() );
+    auto dm_b = dim_find_1D( w_per_i );
 
-    // TODO: Since I now have a Matrix of Outputs, where each Row represents: Input * Weights (I[i] * W[i])
-    //       I can instead use a 2D grid kernel, and Sum each Row using X to represent Row, and Y to represent Output (X,Y)
-    //       and Finally, I can pass the resulting Output vector, through a Sigmoid Kernel (as a 1D Grid).
-    // TODO: Write a CUDA __global__ kernel which will iterate mtx_output, by ( input.size (X) * w_per_i (Y)
-    //       and Sum each ROW into an Output VECTOR.
-    //       Then we sigmoid each entry in the output vector.
+    // Sum each column into a vector row : I[i] * W[i] = I[k]
+    // Sumarize Columns, using Matrix as Input, Sums vector as output, 
+    // where Width = Weights per I (# of Columns), and Height = # of Inputs (# of Rows )
+    sum_columns<<<dm_b.num_blocks_x,dm_b.block_threads_x>>>( mtx_ptr, sums_ptr, w_per_i, input.size() );
 
-    /*
-    for ( int i = 0; i < weights.size(); i++ )
-    {
-        // calculate where row starts and ends
-        unsigned int start = i * input.size();
-        unsigned int end = ( i * input.size() ) + (input.size());
-        //std::cout << "prop_layer row start: " << start << " & end: " << end << std::endl;
-        //thrust::device_vector<float> row ( mtx_output.begin() + start, mtx_output.begin() + end );
-        //std::cout << "matrix row size: " << row.size() << std::endl;
+    // Finally, run the sums through the activation function
+    // Same num of blocks, same number of threads per block
+    sigmoid_kernel<<<dm_b.num_blocks_x,dm_b.block_threads_x>>>( sums_ptr, sums.size() ); 
+   
+    return sums;
+}
 
-        // get the sum
-        //float sum = thrust::reduce( row.begin(), row.end(), (float)0, thrust::plus<float>() );
-        float sum = thrust::reduce( mtx_output.begin() + start, 
-                                    mtx_output.begin() + end, 
-                                    (float)0, 
-                                    thrust::plus<float>() );
+__host__ ann::d_vector ann::output_errors (
+                                              d_vector ideal,
+                                              d_vector actual
+                                          ) const
+{
+    if ( ideal.size() != actual.size() )
+        throw std::runtime_error ( "cuANN::ann::output_error: ideal vector diff size from actual vector" );
 
-        // run the sum through the activation function
-        output[i] = activation_func( sum );
-    } 
-    */
+    // NOTE: Running this on GPU using device vectors is probably an overkill.
+    //       This should be profiled, and if found to offer no advantage, moved to host code only
+    
+    // This is PART of the MSE: (Ideal[i] - Actual[i])^2 + ...
+    thrust::device_vector<float> errors( ideal.size() );
+    float * ideal_ptr = thrust::raw_pointer_cast( ideal.data() );
+    float * actual_ptr = thrust::raw_pointer_cast( actual.data() );
+    float * errors_ptr = thrust::raw_pointer_cast( errors.data() );
 
-    return output;
+    // First calculate all errors 
+    auto dm = dim_find_1D( ideal.size() );
+    squared_error<<<dm.num_blocks_x,dm.block_threads_x>>>( ideal_ptr, actual_ptr, errors_ptr );
+
+    // This is how u sum all errors using thrust::reduce
+    //float squared_error = thrust::reduce( errors.begin(), errors.end() );
+    return errors;
+}
+
+ann::d_vector ann::gradient_descent (
+                                       // ???
+                                    )
+{
+    // TODO: see Heaton's video
+    //       Calculate all Gradients for each Weight
+}
+
+void ann::back_prop_batch (
+                          // ???
+                         )
+{
+    // TODO:
+    // Calculate for every weight it's gradient descent
+    // Then update the weight using the Back-Prop algorithm
+    // NOTE: See notes and Heaton's videos for more info
+    // NOTE: This is the BATCH version: summ gradients before updating weights
+}
+
+void ann::back_prop_online (
+                            // ???
+                           )
+{
+    // TODO: see above^^
 }
 
 };

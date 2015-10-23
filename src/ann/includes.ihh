@@ -15,5 +15,7 @@
 #include "data/data.hpp"
 #include "dim_find/dim_find.hpp"
 #include "activation/activation.hpp"
+#include "error/error.hpp"
 #include "prg/prg.cu"
 #include "prop/prop.hpp"
+#include "sums/sums.hpp"
