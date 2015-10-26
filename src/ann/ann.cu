@@ -15,27 +15,45 @@ __host__ ann::ann (
   hidden_layers_ ( hidden_layers ), 
   output_neurons_ ( output_neurons )
 {
-    // calculate hidden weights per layer
-    per_layer_ = std::ceil( hidden_neurons_ / hidden_layers_ );
-    // NOTE: due to ceil, the actual number of hidden neurons  may change
-    hidden_neurons_ = per_layer_ * hidden_layers_;
-
-    // If we have hidden neurons
+    // If we have hidden neurons - TODO: Update formula without INPUT WEIGHTS
     if ( hidden_neurons_ > 0 )
     {
+        per_layer_ = std::ceil( hidden_neurons_ / hidden_layers_ );
+        hidden_neurons_ = per_layer_ * hidden_layers_;
+
         // Hidden weights = ( per_layer^2 * (hidden_layers -1) ) + (per_layer * output)
-        unsigned int h_w = std::pow( per_layer_, 2 ) * (hidden_layers_ -1 )
-                         + (per_layer_ * output_neurons_ );
+        //                  the first line calculates weights from input to first hiddden
+        //                  the second line calculates weights within hidden layers
+        //                  the third line calculates weights from hidden to output neurons
+        unsigned int i_w = input_neurons_ * per_layer_;
+        unsigned int h_w = std::pow( per_layer_, 2 ) * (hidden_layers_ -1 );
+        unsigned int o_w = per_layer_ * output_neurons_ ;
 
-        weights_hidden_ = thrust::device_vector<float>( h_w );
+        weights_ = thrust::device_vector<float>( i_w + h_w + o_w );
 
-        // Input weights = Input neurons * hidden neurons per layer
-        weights_input_ = thrust::device_vector<float>( input_neurons_ * per_layer_ ); 
+        // Index the weights appropriately
+        w_index_.push_back( std::make_pair( 0, i_w ) );
+
+        for ( int i = 1; i <= hidden_layers_; i++ )
+        {
+            int h = std::pow( per_layer_, 2 );
+            unsigned int k = i * h;
+            unsigned int left = weights_.size() - k;
+            if ( left >= h )
+                w_index_.push_back( std::make_pair( k, k + h ) );
+
+            else
+                w_index_.push_back( std::make_pair( k, weights_.size() ) );
+        }
+
     }
     // no hidden neurons
     else
-        // Input weights = Input neurons * output neurons
-        weights_input_ = thrust::device_vector<float>( input_neurons_ * output_neurons );
+    {
+        per_layer_ = 0;
+        weights_ = thrust::device_vector<float>( input_neurons_ * output_neurons );
+        w_index_.push_back( std::make_pair( 0, weights_.size() ) );
+    }
    
     // low and upper random bounds
     float upper = .2f;
@@ -45,30 +63,22 @@ __host__ ann::ann (
     auto now = std::chrono::system_clock::now();
     auto seed = std::chrono::duration_cast<std::chrono::milliseconds>( now.time_since_epoch()).count();
 
-    // Random Init input weights
+    // Random Init all hidden weights (regardless of layer index) 
     thrust::transform(  index_sequence_begin,
-                        index_sequence_begin + weights_input_.size(),
-                        weights_input_.begin(), 
+                        index_sequence_begin + weights_.size(),
+                        weights_.begin(),
                         prg( upper, lower, seed ) );
 
-    if ( hidden_neurons > 0 )
-    {
-        // Random Init all hidden weights (regardless of layer index) 
-        thrust::transform(  index_sequence_begin,
-                            index_sequence_begin + weights_hidden_.size(),
-                            weights_hidden_.begin(),
-                            prg( upper, lower, seed ) );
-    }
-
-    //std::cout << "input weights" << std::endl;
-    //for ( int i = 0; i < w_input_.size(); i++ ) std::cout << w_input_[i] << std::endl;
-    //std::cout << "hidden weights" << std::endl;
-    //for ( int i = 0; i < w_hidden_.size(); i++ ) std::cout << w_hidden_[i] << std::endl;
     std::cout << "input neurons: " << input_neurons << std::endl;
     std::cout << "hidden neurons: " << hidden_neurons_ << " (per layer: " << per_layer_ << ")" << std::endl;
     std::cout << "output neurons: " << output_neurons << std::endl;
-    std::cout << "input weights: " << weights_input_.size() << std::endl;
-    std::cout << "hidden weights: " << weights_hidden_.size() << std::endl;
+    std::cout << "weights: " << weights_.size() << std::endl;
+
+    /*
+    for ( auto & pair : w_index_ )
+        std::cout << "weight start: " << std::get<0>( pair ) 
+                  << " weight end: " << std::get<1>( pair ) << std::endl;
+     */
 }
 
 
@@ -92,36 +102,24 @@ __host__ ann::h_vector ann::propagate ( ann::d_vector input ) const
     if ( input.size() != input_neurons_ )
         throw std::runtime_error( "ann::propagate param input size doesn't match input layer size" );
 
-    // NOTE: If I feel the need to add a Bias Neuron, its very simple: 
-    //       at any point where I have the vector `out` simply add at the end, a `1.f` value
+    // NOTE - COMMENTED FOR TESTING - UNCOMMENT !
+    // Put the input values Through the Sigmoid Function
+    //auto dim = dim_find_1D( input.size() );
+    //float * input_ptr = thrust::raw_pointer_cast( input.data() );
+    //sigmoid_kernel<<<dim.num_blocks_x,dim.block_threads_x>>>( input_ptr, input.size() );
 
-    // put it through the input weights
-    thrust::device_vector<float> out = prop_layer( weights_input_, input );
+    // propagate through the first (input to hidden/output)
+    // if this is the only layer, this is our only propagation
+    thrust::device_vector<float> out = prop_layer( std::get<0>(w_index_[0]),
+                                                   std::get<1>(w_index_[0]),
+                                                   input );
 
-    for ( int i = 0; i < hidden_layers_; i++ )
+    // Repeat for hidden layers
+    for ( int i = 1; i < w_index_.size(); i++)
     {
-        // increment by layer's full connections
-        int h_w = std::pow( per_layer_, 2 );
-        // find current position
-        unsigned int k = i * h_w;
-        // find how many weights are left
-        unsigned int left = weights_hidden_.size() - k;
-
-        // enough weights left - send the block for this layer
-        if ( left >= h_w )
-        {
-            thrust::device_vector<float> hidden( weights_hidden_.begin() + k, 
-                                                 weights_hidden_.begin() + (k + h_w) );
-            out = prop_layer( hidden, out );
-        }
-        // not enough weights left - send whatever weights we have left, they are the last
-        // connecting to the output neurons
-        else
-        {
-            thrust::device_vector<float> hidden( weights_hidden_.begin() + k, 
-                                                 weights_hidden_.end() );
-            out = prop_layer( hidden, out );
-        }
+        out = prop_layer( std::get<0>(w_index_[i]),
+                          std::get<1>(w_index_[i]),
+                                            input );
     }
 
     return out;
@@ -158,17 +156,35 @@ __host__ float ann::epoch ( const cuANN::data & input )
 
 
 __host__ ann::d_vector ann::prop_layer ( 
-                                            ann::d_vector weights,
-                                            ann::d_vector input
+                                          unsigned int weights_begin,
+                                          unsigned int weights_end,
+                                          ann::d_vector input
                                        ) const
 {
+    // TODO: ADD BIAS NEURON FOR EACH AND EVERY INPUT 
+    //       MAKE SURE THAT ONE NEURON FIRES A VALUE OF 1.f
+
+    // WARNING - The only reason I create a new Device Vector here
+    //           Is because I don't know how to get a raw pointer from a specific range.
+    // TODO: Ask on Stackoveflow.com if that is possible
+    thrust::device_vector<float> weights ( weights_.begin() + weights_begin,
+                                           weights_.begin() + weights_end );
+
+    std::cout << "weights: " << std::endl;
+    for ( auto val : weights )
+        std::cout << val << std::endl;
+
+    std::cout << "input: " << std::endl;
+    for ( auto val : input )
+        std::cout << val << std::endl;
+
+    // Vectorized Matrix Output
     unsigned int w_per_i = weights.size() / input.size();
-    // vectorized matrix output
     thrust::device_vector<float> mtx_output( weights.size() );
 
     // Get raw pointers for CUDA kernel
-    float * inputs_ptr = thrust::raw_pointer_cast( input.data() );
-    float * weights_ptr = thrust::raw_pointer_cast( weights.data() );
+    float * input_ptr = thrust::raw_pointer_cast( input.data() );
+    float * weight_ptr = thrust::raw_pointer_cast( weights.data() );
     float * mtx_ptr = thrust::raw_pointer_cast( mtx_output.data() );
 
     // Calculate block theads and block number
@@ -182,7 +198,20 @@ __host__ ann::d_vector ann::prop_layer (
     // Multiply Each Input, with its Row of Weights (Matrix of Weights) resulting in a Matrix of Sums (per Input/Row)
     // This is a 2D Grid iterations, using as input Weights and Inputs, and the Matrix as output
     // Width (Columns) is # weights per input, Height (Rows) is # inputs
-    prop_matrix<<<nB1,tPb1>>>( weights_ptr, inputs_ptr, mtx_ptr, w_per_i, input.size() );
+    prop_matrix<<<nB1,tPb1>>>( weight_ptr, input_ptr, mtx_ptr, w_per_i, input.size() );
+
+    std::cout << "output mtx: " << std::endl;
+    int k = 0;
+    for ( auto val : mtx_output )
+    {
+        std::cout << val << " ";
+        k++;
+        if ( k == w_per_i )
+        {
+            k = 0;
+            std::cout << std::endl;
+        }
+    }
 
     // Sums Row vector
     thrust::device_vector<float> sums ( w_per_i );

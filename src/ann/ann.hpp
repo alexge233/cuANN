@@ -66,7 +66,8 @@ private:
     /// Propagate input through a single layer
     /// @param activaction_func may be a sigmoid, tahn, etc.
     d_vector prop_layer (
-                          d_vector weights,
+                          unsigned int weights_begin,
+                          unsigned int weights_end,
                           d_vector input
                         ) const;
 
@@ -100,17 +101,16 @@ private:
     unsigned int hidden_layers_;
     unsigned int per_layer_;
 
-    /// Input Weights
-    thrust::device_vector<float> weights_input_;
-
-    /// Hidden Weights - WARNING: This is a vectorised Matrix!
-    ///                - If more than one hidden layer is given
-    ///                - This vector will contain ALL hidden weights
+    /// WARNING: This is a vectorised Matrix!
+    ///                - This vector will contain ALL weights
     ///                - in blocks of `layers_`, e.g.: 
     ///                -    first hidden vector weights will be from [0]-[per_layer_]_,
     ///                -    second hidden vector weights will be from [per_layer_] - [2 * per_layer_]
     ///                -    Furthermore, within a layer, they go as: [H1W2],[H2W2],etc.
-    thrust::device_vector<float> weights_hidden_;
+    thrust::device_vector<float> weights_;
+
+    /// This index keeps track of where Weights begin and end (per layer increments)
+    std::vector<std::pair<int,int>> w_index_;
 
 };
 }
