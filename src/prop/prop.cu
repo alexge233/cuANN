@@ -3,8 +3,8 @@ namespace cuANN
 {
 
 __global__ void prop_matrix ( 
-                              float * weight, 
-                              float * input, 
+                              const float * weight, 
+                              const float * input, 
                               float * output, 
                               unsigned int w_size, 
                               unsigned int i_size 

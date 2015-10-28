@@ -56,11 +56,19 @@ public:
 private:
 
     /**
-     * @brief This is a Training Epoch (an iteration of the data)
-     * @note  Uses the Batch Training MSE, not incremental
+     * @brief This is a Training Epoch
      * @return Mean-Squared Error
+     * @param input is a continous memory of many input vectors,
+     * which are separated at interval `input_len`.
+     * @param output is also a continous memory of many output vectors,
+     * also separated at interval `output_len`
      */
-    float epoch ( const cuANN::data & input );
+    float epoch ( 
+                    d_vector & input,
+                    unsigned int input_len,
+                    d_vector & output,
+                    unsigned int output_len
+                );
 
 
     /// Propagate input through a single layer
@@ -68,7 +76,7 @@ private:
     d_vector prop_layer (
                           unsigned int weights_begin,
                           unsigned int weights_end,
-                          d_vector input
+                          const d_vector & input
                         ) const;
 
     /// Calculate Output's Squared Errors
@@ -77,21 +85,6 @@ private:
                                d_vector ideal,
                                d_vector actual
                             ) const;
-
-    /// Calculate all gradient descents for all weights
-    d_vector gradient_descent (
-                               // ???
-                              );
-
-    /// Back-Propagate for a Batch
-    void back_prop_batch (
-                            // ???
-                         );
-
-    /// Back-Propagate Online (for all Gradients)
-    void back_prop_online (
-                            // ???
-                          );
 
 
     // ANN Private Vars

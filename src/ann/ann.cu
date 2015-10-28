@@ -73,12 +73,6 @@ __host__ ann::ann (
     std::cout << "hidden neurons: " << hidden_neurons_ << " (per layer: " << per_layer_ << ")" << std::endl;
     std::cout << "output neurons: " << output_neurons << std::endl;
     std::cout << "weights: " << weights_.size() << std::endl;
-
-    /*
-    for ( auto & pair : w_index_ )
-        std::cout << "weight start: " << std::get<0>( pair ) 
-                  << " weight end: " << std::get<1>( pair ) << std::endl;
-     */
 }
 
 
@@ -94,6 +88,9 @@ __host__ float ann::train (
     // after each iteration
     // Stop only if mse_stop is achieved, or if we run out of epochs
     // TODO...
+    // Iterate and load all training data (input & output) on the device
+    // And re-use it to avoid re-allocations.
+
     return -1.f;
 }
 
@@ -104,9 +101,9 @@ __host__ ann::h_vector ann::propagate ( ann::d_vector input ) const
 
     // NOTE - COMMENTED FOR TESTING - UNCOMMENT !
     // Put the input values Through the Sigmoid Function
-    //auto dim = dim_find_1D( input.size() );
-    //float * input_ptr = thrust::raw_pointer_cast( input.data() );
-    //sigmoid_kernel<<<dim.num_blocks_x,dim.block_threads_x>>>( input_ptr, input.size() );
+    auto dim = dim_find_1D( input.size() );
+    float * input_ptr = thrust::raw_pointer_cast( input.data() );
+    sigmoid_kernel<<<dim.num_blocks_x,dim.block_threads_x>>>( input_ptr, input.size() );
 
     // propagate through the first (input to hidden/output)
     // if this is the only layer, this is our only propagation
@@ -119,72 +116,58 @@ __host__ ann::h_vector ann::propagate ( ann::d_vector input ) const
     {
         out = prop_layer( std::get<0>(w_index_[i]),
                           std::get<1>(w_index_[i]),
-                                            input );
+                                             out );
     }
 
     return out;
 }
 
 
-__host__ float ann::epoch ( const cuANN::data & input )
+__host__ float ann::epoch ( 
+                                d_vector & input,
+                                unsigned int input_len,
+                                d_vector & output,
+                                unsigned int output_len
+                          )
 {
     // Accumulate squared errors
     thrust::host_vector<float> errors( input.size() );
 
-    //  Iterate input - 
-    //  NOTE: Iterating host_vectors from training data requires a lot of copying here
-    //  I think its best if the input param, was a vector of pairs with device_vectors
-    //  Since its simply stupid loading them from host to device at every iteration
-    for ( auto & row : input )
-    {
-        // Propagate input - get output (WARNING: copying from host to device)
-        thrust::device_vector<float> output = propagate( row.input );
+    // TODO: Iterate input, vector at specific interval
+    // TODO: Extract output, vector at specific interval
+    // TODO: Propagate Input, measure Output, 
+    //       ^^^ STORE someplace the Resulting vectors: Sum( Input * Weight )
+    // NOTE: Propagation during a training epoch is different from simple (TEST) propagation.
 
-        // get squared errors - (WARNING: copying from host to device)
-        thrust::device_vector<float> sq_errors = output_errors( row.output, output );
+    // TODO: Calculate Error at last layer
+    // TODO: Working backwards, calculate Error at all layers
+    // TODO: Calculate for each Gradient for each weight
+    // TODO: Adjust Each weight, using the gradient
 
-        // sum up square errors for this input - push it back
-        float sum_errors = thrust::reduce( sq_errors.begin(), sq_errors.end() );
-        errors.push_back( sum_errors );
-    }
-    // sum all errors
-    float num_errors = errors.size();
-    float sum_errors = thrust::reduce( errors.begin(), errors.end() );
-
-    return sum_errors  / num_errors;
+    //return sum_errors  / num_errors;
+    return 0.f;
 }
 
 
 __host__ ann::d_vector ann::prop_layer ( 
                                           unsigned int weights_begin,
                                           unsigned int weights_end,
-                                          ann::d_vector input
+                                          const ann::d_vector & input
                                        ) const
 {
     // TODO: ADD BIAS NEURON FOR EACH AND EVERY INPUT 
     //       MAKE SURE THAT ONE NEURON FIRES A VALUE OF 1.f
+    //       Only way to do this, is to re-alloc (alloc) a new input vector here.
 
-    // WARNING - The only reason I create a new Device Vector here
-    //           Is because I don't know how to get a raw pointer from a specific range.
-    // TODO: Ask on Stackoveflow.com if that is possible
-    thrust::device_vector<float> weights ( weights_.begin() + weights_begin,
-                                           weights_.begin() + weights_end );
-
-    std::cout << "weights: " << std::endl;
-    for ( auto val : weights )
-        std::cout << val << std::endl;
-
-    std::cout << "input: " << std::endl;
-    for ( auto val : input )
-        std::cout << val << std::endl;
-
-    // Vectorized Matrix Output
-    unsigned int w_per_i = weights.size() / input.size();
-    thrust::device_vector<float> mtx_output( weights.size() );
+    unsigned int weights_size = weights_end - weights_begin;
+    unsigned int w_per_i = weights_size / input.size();
 
     // Get raw pointers for CUDA kernel
-    float * input_ptr = thrust::raw_pointer_cast( input.data() );
-    float * weight_ptr = thrust::raw_pointer_cast( weights.data() );
+    const float * input_ptr = thrust::raw_pointer_cast( input.data() );
+    const float * weight_ptr = thrust::raw_pointer_cast( weights_.data() ) + weights_begin;
+
+    // Allocate Vectorized Matrix and get Raw pointer
+    thrust::device_vector<float> mtx_output( weights_size );
     float * mtx_ptr = thrust::raw_pointer_cast( mtx_output.data() );
 
     // Calculate block theads and block number
@@ -199,19 +182,6 @@ __host__ ann::d_vector ann::prop_layer (
     // This is a 2D Grid iterations, using as input Weights and Inputs, and the Matrix as output
     // Width (Columns) is # weights per input, Height (Rows) is # inputs
     prop_matrix<<<nB1,tPb1>>>( weight_ptr, input_ptr, mtx_ptr, w_per_i, input.size() );
-
-    std::cout << "output mtx: " << std::endl;
-    int k = 0;
-    for ( auto val : mtx_output )
-    {
-        std::cout << val << " ";
-        k++;
-        if ( k == w_per_i )
-        {
-            k = 0;
-            std::cout << std::endl;
-        }
-    }
 
     // Sums Row vector
     thrust::device_vector<float> sums ( w_per_i );
@@ -256,30 +226,5 @@ __host__ ann::d_vector ann::output_errors (
     return errors;
 }
 
-ann::d_vector ann::gradient_descent (
-                                       // ???
-                                    )
-{
-    // TODO: see Heaton's video
-    //       Calculate all Gradients for each Weight
-}
-
-void ann::back_prop_batch (
-                          // ???
-                         )
-{
-    // TODO:
-    // Calculate for every weight it's gradient descent
-    // Then update the weight using the Back-Prop algorithm
-    // NOTE: See notes and Heaton's videos for more info
-    // NOTE: This is the BATCH version: summ gradients before updating weights
-}
-
-void ann::back_prop_online (
-                            // ???
-                           )
-{
-    // TODO: see above^^
-}
 
 };
