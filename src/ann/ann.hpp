@@ -40,11 +40,9 @@ public:
      * @param momentum is the momentum used to affect previous Gradients
      */
     float train (
-                  const cuANN::data & input,
+                  const cuANN::data & train_data,
                   float mse_stop,
-                  unsigned int epochs,
-                  float learning,
-                  float momentum
+                  unsigned int epochs
                 );
     
     /**
@@ -66,13 +64,18 @@ private:
     float epoch ( 
                     d_vector & input,
                     unsigned int input_len,
-                    d_vector & output,
-                    unsigned int output_len
+                    h_vector & output,
+                    unsigned int output_len,
+                    unsigned int total
                 );
 
 
-    /// Propagate input through a single layer
-    /// @param activaction_func may be a sigmoid, tahn, etc.
+    /// Propagate input via single layer
+    /// @param weights_begin is the weights[index] start range
+    /// @param weights_end is the weights[index] end range
+    /// @param input is the actual input vector (device mem)
+    /// @return the Sum of (Input * Weight)
+    /// @warning the return vector is NOT sigmoid activated!
     d_vector prop_layer (
                           unsigned int weights_begin,
                           unsigned int weights_end,

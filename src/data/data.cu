@@ -86,6 +86,16 @@ int data::size() const
     return rows_.size();
 }
 
+int data::input_size() const
+{
+    return in_vec_size_;
+}
+
+int data::output_size() const
+{
+    return out_vec_size_;
+}
+
 data::const_iterator data::begin() const
 {
     return rows_.begin();
@@ -96,5 +106,12 @@ data::const_iterator data::end() const
     return rows_.end();
 }
 
+const row & data::operator[] (const int idx ) const
+{
+  if( idx < 0 || idx > rows_.size() )
+    throw std::runtime_error ("data::operator[] idx out of bounds");
+
+  return rows_[idx];
+}
 
 }

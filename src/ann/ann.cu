@@ -15,7 +15,13 @@ __host__ ann::ann (
   hidden_layers_ ( hidden_layers ), 
   output_neurons_ ( output_neurons )
 {
-    // If we have hidden neurons - TODO: Update formula without INPUT WEIGHTS
+    if ( hidden_neurons == 0 && hidden_layers != 0 )
+        throw std::runtime_error ( "you can't have no hidden neurons without hidden layers" );
+
+    if ( hidden_neurons != 0 && hidden_layers == 0 )
+        throw std::runtime_error ( "you can't have hidden neurons without hidden layers" );
+
+    // If we have hidden neurons
     if ( hidden_neurons_ > 0 )
     {
         per_layer_ = std::ceil( hidden_neurons_ / hidden_layers_ );
@@ -29,21 +35,33 @@ __host__ ann::ann (
         unsigned int h_w = std::pow( per_layer_, 2 ) * (hidden_layers_ -1 );
         unsigned int o_w = per_layer_ * output_neurons_ ;
 
+        // alloc weights
         weights_ = thrust::device_vector<float>( i_w + h_w + o_w );
 
         // Index the weights appropriately
         w_index_.push_back( std::make_pair( 0, i_w ) );
 
+        // weight count (update to keep track of previous weight index)
+        unsigned int w_count = i_w;
+
         for ( int i = 1; i <= hidden_layers_; i++ )
         {
-            int h = std::pow( per_layer_, 2 );
-            unsigned int k = i * h;
-            unsigned int left = weights_.size() - k;
-            if ( left >= h )
-                w_index_.push_back( std::make_pair( k, k + h ) );
-
+            // This layer's hidden neurons
+            int w_layer = (per_layer_ * per_layer_);
+            // index: weights_[from]
+            unsigned int from = w_count;
+            // weights still needed
+            unsigned int left = weights_.size() - from;
+            if ( left > w_layer )
+            {
+                w_index_.push_back( std::make_pair( from, from + w_layer ) );
+                w_count += w_layer; 
+            }
             else
-                w_index_.push_back( std::make_pair( k, weights_.size() ) );
+            {
+                w_index_.push_back( std::make_pair( from, weights_.size() ) );
+                w_count += w_layer;
+            }
         }
 
     }
@@ -77,21 +95,47 @@ __host__ ann::ann (
 
 
 __host__ float ann::train (
-                              const cuANN::data & input,
+                              const cuANN::data & train_data,
                               float mse_stop,
-                              unsigned int epochs,
-                              float learning,
-                              float momentum
+                              unsigned int epochs
                           )
 {
-    // Run epoch iterations, doing a back_propagation
-    // after each iteration
-    // Stop only if mse_stop is achieved, or if we run out of epochs
-    // TODO...
-    // Iterate and load all training data (input & output) on the device
-    // And re-use it to avoid re-allocations.
+    // Load the training input data in device memory
+    thrust::device_vector<float> input_rows( train_data.size() * train_data.input_size() );
+    // Load the training output data in host memory
+    thrust::host_vector<float> output_rows( train_data.size() * train_data.output_size() );
 
-    return -1.f;
+    for ( int i = 0; i < train_data.size(); i++ )
+    {
+        thrust::copy( train_data[i].input.begin(), 
+                      train_data[i].input.end(),
+                      input_rows.begin() + (i * train_data.input_size()) );
+        thrust::copy( train_data[i].output.begin(),
+                      train_data[i].output.end(),
+                      output_rows.begin() + (i * train_data.output_size()) );
+    }
+
+    if ( input_rows.size() == output_rows.size() )
+        throw std::runtime_error("input rows not equal to output rows");
+
+    float mse = 0.f;
+
+    // Iterate epochs and compare mse
+    for ( int i = 0; i < epochs; i++ )
+    {
+        mse = epoch( input_rows,
+                     train_data.input_size(),
+                     output_rows,
+                     train_data.output_size(),
+                     train_data.size() );
+
+        // NOTE/TODO: early stopping requires a validation set, which is different from the training set
+        //            we can use it to calculate the output error (MSE) from validation test instead of the training set
+        if ( mse < mse_stop )
+            break;
+    }
+
+    return mse;
 }
 
 __host__ ann::h_vector ann::propagate ( ann::d_vector input ) const
@@ -99,48 +143,101 @@ __host__ ann::h_vector ann::propagate ( ann::d_vector input ) const
     if ( input.size() != input_neurons_ )
         throw std::runtime_error( "ann::propagate param input size doesn't match input layer size" );
 
-    // NOTE - COMMENTED FOR TESTING - UNCOMMENT !
-    // Put the input values Through the Sigmoid Function
-    auto dim = dim_find_1D( input.size() );
-    float * input_ptr = thrust::raw_pointer_cast( input.data() );
-    sigmoid_kernel<<<dim.num_blocks_x,dim.block_threads_x>>>( input_ptr, input.size() );
+    // Put the input through the activation function
+    thrust::device_vector<float> output = input;
+    float * output_ptr = thrust::raw_pointer_cast( output.data() );
+    auto dim = dim_find_1D( output.size() );
+    sigmoid_kernel<<<dim.num_blocks_x,dim.block_threads_x>>>( output_ptr, output.size() );
 
-    // propagate through the first (input to hidden/output)
-    // if this is the only layer, this is our only propagation
-    thrust::device_vector<float> out = prop_layer( std::get<0>(w_index_[0]),
-                                                   std::get<1>(w_index_[0]),
-                                                   input );
-
-    // Repeat for hidden layers
-    for ( int i = 1; i < w_index_.size(); i++)
+    // Propagate Input through every layer.
+    // If we have no hidden, then propagate through the weights from input to output layers
+    for ( int i = 0; i < w_index_.size(); i++)
     {
-        out = prop_layer( std::get<0>(w_index_[i]),
-                          std::get<1>(w_index_[i]),
-                                             out );
+        unsigned int w_from = std::get<0>(w_index_[i]);
+        unsigned int w_to = std::get<1>(w_index_[i]);
+
+        std::cout << "weight from: " << w_from << " weight to: " << w_to << std::endl;
+    
+        // Update Out to equal the propagation of previous out.
+        auto sums = prop_layer( w_from,
+                                w_to,
+                                output );
+
+        // Copy the sums as output
+        output = sums;
+    
+        // Run the output through the activation function
+        auto dim_B = dim_find_1D( output.size() );
+        output_ptr = thrust::raw_pointer_cast( output.data() );
+        sigmoid_kernel<<<dim_B.num_blocks_x,dim_B.block_threads_x>>>( output_ptr, output.size() );
     }
 
-    return out;
+    return output;
 }
 
 
 __host__ float ann::epoch ( 
                                 d_vector & input,
                                 unsigned int input_len,
-                                d_vector & output,
-                                unsigned int output_len
+                                h_vector & output,
+                                unsigned int output_len,
+                                unsigned int total
                           )
 {
     // Accumulate squared errors
-    thrust::host_vector<float> errors( input.size() );
+    thrust::device_vector<float> errors( total );
 
-    // TODO: Iterate input, vector at specific interval
-    // TODO: Extract output, vector at specific interval
-    // TODO: Propagate Input, measure Output, 
-    //       ^^^ STORE someplace the Resulting vectors: Sum( Input * Weight )
-    // NOTE: Propagation during a training epoch is different from simple (TEST) propagation.
+    // Iterate all training data once
+    for ( int i = 0; i < total; i++ )
+    {
+        // Assign our actual output to input - We will modify this
+        thrust::device_vector<float> actual_output( input.begin() + (input_len*i), 
+                                                    input.begin() + (input_len*i) + input_len );
 
-    // TODO: Calculate Error at last layer
-    // TODO: Working backwards, calculate Error at all layers
+        // All our Layer Sum Input as a continous vector, it is indexed by neurons per layer
+        // not including the input neurons
+        thrust::device_vector<float> layer_sums( hidden_neurons_ + output_neurons_ );
+        unsigned int sums_idx = 0;
+
+        // Put input through the sigmoid (Input Neurons)
+        float * output_ptr = thrust::raw_pointer_cast( actual_output.data() );
+        auto dimA = dim_find_1D( actual_output.size() );
+        sigmoid_kernel<<<dimA.num_blocks_x,dimA.block_threads_x>>>( output_ptr, actual_output.size() );
+         
+        // propagate through every layer (Input to Hidde, Hidden to Output)
+        for ( int k = 0; k < w_index_.size(); k++)
+        {
+            unsigned int weights_from = std::get<0>(w_index_[k]);
+            unsigned int weights_to = std::get<1>(w_index_[k]);
+
+            // Sums ( Input * Weights ) for Layer[k,j]
+            auto sums = prop_layer( weights_from,
+                                    weights_to,
+                                    actual_output );
+
+            // Copy the sums to the correct range
+            thrust::copy( sums.begin(), sums.end(), layer_sums.begin() + sums_idx );
+            sums_idx += sums.size();
+
+            // Assign Sums to Actual Output
+            actual_output = sums;
+            output_ptr = thrust::raw_pointer_cast( actual_output.data() );
+
+            // Put the actual output through the activation function
+            auto dimB = dim_find_1D( actual_output.size() );
+            sigmoid_kernel<<<dimB.num_blocks_x,dimB.block_threads_x>>>( output_ptr, actual_output.size() ); 
+        }
+        // TODO: At this point we can calculate the errors (back-prop)
+
+        // We need the actual output, in order to calculate the errors
+        thrust::host_vector<float> ideal_output( output.begin() + (output_len*i),
+                                                 output.begin() + (output_len*i) + output_len );
+    }
+
+    // WARNING: The way we calculate gradient changes the Training style: (Batch or Online)
+    //          If we calculate the Gradient for each Training set, during the Epoch, it is called ONLINE learning
+    //          Else if we calculate the gradient for the Entire Epoch it is called BATCH learning
+
     // TODO: Calculate for each Gradient for each weight
     // TODO: Adjust Each weight, using the gradient
 
@@ -158,6 +255,12 @@ __host__ ann::d_vector ann::prop_layer (
     // TODO: ADD BIAS NEURON FOR EACH AND EVERY INPUT 
     //       MAKE SURE THAT ONE NEURON FIRES A VALUE OF 1.f
     //       Only way to do this, is to re-alloc (alloc) a new input vector here.
+
+    //std::cout << "Input: " << std::endl;
+    //for ( const auto & val : input ) std::cout << val << std::endl;
+    //thrust::device_vector<float> weights( weights_.begin() + weights_begin, weights_.begin() + weights_end );
+    //std::cout << "Weights: " << std::endl;
+    //for ( const auto & val : weights ) std::cout << val << std::endl;
 
     unsigned int weights_size = weights_end - weights_begin;
     unsigned int w_per_i = weights_size / input.size();
@@ -182,6 +285,21 @@ __host__ ann::d_vector ann::prop_layer (
     // This is a 2D Grid iterations, using as input Weights and Inputs, and the Matrix as output
     // Width (Columns) is # weights per input, Height (Rows) is # inputs
     prop_matrix<<<nB1,tPb1>>>( weight_ptr, input_ptr, mtx_ptr, w_per_i, input.size() );
+    
+    /*
+    std::cout << "Input * Weights: " << std::endl;
+    int k = 0;
+    for ( const auto & val : mtx_output )
+    {
+        k++;
+        std::cout << val << " ";
+        if (k == w_per_i)
+        { 
+            std::cout << std::endl;
+            k = 0;
+        }
+    }
+    */   
 
     // Sums Row vector
     thrust::device_vector<float> sums ( w_per_i );
@@ -193,12 +311,13 @@ __host__ ann::d_vector ann::prop_layer (
     // where Width = Weights per I (# of Columns), and Height = # of Inputs (# of Rows )
     sum_columns<<<dm_b.num_blocks_x,dm_b.block_threads_x>>>( mtx_ptr, sums_ptr, w_per_i, input.size() );
 
-    // Finally, run the sums through the activation function
-    // Same num of blocks, same number of threads per block
-    sigmoid_kernel<<<dm_b.num_blocks_x,dm_b.block_threads_x>>>( sums_ptr, sums.size() ); 
-   
+    //std::cout << "Sums: " << std::endl;
+    //for ( const auto & val : sums ) std::cout << val << " ";
+    //std::cout << std::endl;
+
     return sums;
 }
+
 
 __host__ ann::d_vector ann::output_errors (
                                               d_vector ideal,

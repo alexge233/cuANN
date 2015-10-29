@@ -45,15 +45,23 @@ public:
     /// Get the data size
     int size() const;
 
+    /// Get the Input vector size
+    int input_size() const;
+
+    /// Get the Output vector size
+    int output_size() const;
+
+    /// Subscript Operator
+    const row & operator [] ( const int idx ) const;
+
     /// Expose const iterators to our data's rows
     using const_iterator = std::vector<row>::const_iterator;
 
+    /// Iterate begin
     const_iterator begin() const;
 
+    /// Iterate end
     const_iterator end() const;
-
-    /// TODO: I need a way to load all rows into device memory
-    ///       and keep them there during training
 
 private:
 

@@ -42,7 +42,13 @@ set(CUDA_ATTACH_VS_BUILD_RULE_TO_CUDA_FILE ON)
 # nvcc flags & C++ Flags - NOTE Optimisation can go here
 set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};#-gencode arch=compute_20,code=sm_20
                                        #-gencode arch=compute_20,code=sm_21;
-                                       -gencode arch=compute_30,code=sm_30;-std=c++11;-DVERBOSE;--use_fast_math)
+                                       -gencode arch=compute_30,code=sm_30;
+                                       -std=c++11;
+                                       -DVERBOSE;
+                                       -DNDEBUG;
+                                       -O3;
+                                       -Xcompiler -fPIC;
+                                       --use_fast_math)
 
 add_subdirectory(${SRC})
 add_subdirectory(${SAMPLES})
@@ -66,9 +72,9 @@ cuda_add_executable(xor ${XOR_O})
 target_link_libraries(xor cuANN)
 
 # the Testing Sample
-cuda_compile(LNET_O ${SAMPLES}/test.cu)
-cuda_add_executable(lnet ${LNET_O})
-target_link_libraries(lnet cuANN)
+cuda_compile(TEST_O ${SAMPLES}/test.cu)
+cuda_add_executable(test_net ${TEST_O})
+target_link_libraries(test_net cuANN)
 
 # Abelone Sample
 cuda_compile(ABEL_O ${SAMPLES}/abelone.cu)
