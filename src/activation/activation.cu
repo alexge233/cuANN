@@ -24,8 +24,15 @@ __global__ void sigmoid_kernel( float * input, unsigned int size )
     if ( x < size )
     {
         float value = input[x];
-        input[x] = 1.0 / (1.0 + exp ( value ) );
+        input[x] = 1.f / (1.f + exp ( value ) );
     }
 }
+
+__host__ __device__ float sigmoid_prime( const float & input )
+{
+    float out = 1.f / (1.0 + exp ( input ) );
+    return ( out * ( 1.f - out ) );
+}
+
 
 }

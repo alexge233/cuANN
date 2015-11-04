@@ -1,24 +1,19 @@
-TODO ASAP: Read comments in ann.hpp and ann.cu
-           Weights need to be changed, and so is propagation of input
 
-A Training epoch is:
-    1. for each training set (input + ideal output)
-        a. propagate the input, get the output
-        b. calculate the error (not MSE)
-        c. for each layer (in reverse from last to first)
-            calculate the layer delta (different for hidden layers)
-        d. for each weight (in reverse from last to first)
-            calculate the weight gradient
-    2. Back-propagate the weight updates, using the weight gradients.
+TODO:
+        1. calculate delta layer for output
 
-NOTE: this is much more complex than simple propagation.
-      It requires some book-keeping: Weights, Outputs, Product of Input * Weights (Not Sigmoidal Output)
-      It also requires the prime function (of Sigmoid or Tanh) to be available.
-      This needs a few kernels to be written and tested thoroughly,
-      but is what needs to be done, in order to finish this library.
+        2. calculate delta lalyer for hidden layers
 
-REMEBER: KEEP IT SIMPLE AND STUPID.
+        3. calculate gradient descents for each weight
 
-PS:   Training data on HOST is not very smart.
-      In our  <train> method, we should load it all on the device,
-      and keep it there whilst training, and only then we will deallocate it.
+        4. update weights at every epoch (or at every input pattern)
+        
+NOTES:
+
+        I might be able to do propagation, in a single kernel
+        either by using a for-loop for each layer (and global weight array)
+        or perhaps by using a 3D grid, where the z coordinate represents the layer.
+
+        I should also be able to do delta error calculations
+        using a shared array.
+        This would hold the sum of w[ik] * d[k] for each neuron.

@@ -194,9 +194,10 @@ __host__ float ann::epoch (
         thrust::device_vector<float> actual_output( input.begin() + (input_len*i), 
                                                     input.begin() + (input_len*i) + input_len );
 
-        // All our Layer Sum Input as a continous vector, it is indexed by neurons per layer
-        // not including the input neurons
+        // All our Layer Sum Input, it is indexed by neurons per layer, excluding input neurons
         thrust::device_vector<float> layer_sums( hidden_neurons_ + output_neurons_ );
+
+        // local counter used for copying thrust vector
         unsigned int sums_idx = 0;
 
         // Put input through the sigmoid (Input Neurons)
@@ -227,11 +228,32 @@ __host__ float ann::epoch (
             auto dimB = dim_find_1D( actual_output.size() );
             sigmoid_kernel<<<dimB.num_blocks_x,dimB.block_threads_x>>>( output_ptr, actual_output.size() ); 
         }
-        // TODO: At this point we can calculate the errors (back-prop)
-
         // We need the actual output, in order to calculate the errors
         thrust::host_vector<float> ideal_output( output.begin() + (output_len*i),
                                                  output.begin() + (output_len*i) + output_len );
+
+        // calculate the differences of final layer Error: (Actual - Ideal)
+        thurst::device_vector<float> output_error ( ideal_output.size() );
+
+        // element wise subtraction: output_error = actual_output - ideal_output
+        thrust::transform( actual_output.begin(),
+                           actual_output.end(),
+                           ideal_output.begin(),
+                           output_error.begin(),
+                           thrust::minus<float>() );
+
+        // Store the δ (delta) errors here: Size is same as layer_sums
+        thrust::device_vector<float> delta_errors ( layer_sums.size() );
+
+        // Get raw pointers
+        float * lsums_ptr = thrust::raw_pointer_cast( layer_sums.data() );
+        float * delta_ptr = thrust::raw_pointer_cast( delta_errors.data() );
+        float * outerr_ptr = thrust::raw_pointer_cast( output_error.data() );
+
+        // TODO: Calculate the Output first, then reverse iterate the layers & weights
+        //       I can probably use one kernel for hidden layer deltas and one for output layer deltas
+        // NOTE: output delta calculation requires as many threads as there are output neurons
+        //       the same applies for hidden layers: as many threads as there are neurons in a layer
     }
 
     // WARNING: The way we calculate gradient changes the Training style: (Batch or Online)
