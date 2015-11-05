@@ -45,8 +45,9 @@ set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};#-gencode arch=compute_20,code=sm_20
                                        -gencode arch=compute_30,code=sm_30;
                                        -std=c++11;
                                        -DVERBOSE;
-                                       -DNDEBUG;
-                                       -O3;
+                                       -DTHRUST_DEBUG;
+                                       #-DNDEBUG;
+                                       #-O3;
                                        -Xcompiler -fPIC;
                                        --use_fast_math)
 
@@ -58,6 +59,7 @@ cuda_add_library(cuANN
                 ${SRC}/activation/activation.cu
                 ${SRC}/ann/ann.cu
                 ${SRC}/error/error.cu
+                ${SRC}/delta/delta.cu
                 ${SRC}/prg/prg.cu
                 ${SRC}/data/data.cu
                 ${SRC}/prop/prop.cu
@@ -67,7 +69,7 @@ cuda_add_library(cuANN
 # Then we may build the samples
 
 # the XOR Sample
-cuda_compile(XOR_O ${SAMPLES}/xor.cu)
+cuda_compile(XOR_O ${SAMPLES}/xor.cu )
 cuda_add_executable(xor ${XOR_O})
 target_link_libraries(xor cuANN)
 
@@ -80,6 +82,5 @@ target_link_libraries(test_net cuANN)
 cuda_compile(ABEL_O ${SAMPLES}/abelone.cu)
 cuda_add_executable(abelone ${ABEL_O})
 target_link_libraries(abelone cuANN)
-
 
 # and Finally, define the install location
