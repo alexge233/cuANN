@@ -23,9 +23,9 @@ In order to build:
 
 The dependencies are:
 
-CUDA >= 6.5
-Thrust >= 1.7
-CMake >= 2.8
-g++   >= 4.8
+    CUDA >= 6.5
+    Thrust >= 1.7
+    CMake >= 2.8
+    g++   >= 4.8
 
 cuANN uses C++11 features
