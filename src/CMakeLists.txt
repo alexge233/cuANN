@@ -1,11 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 
-add_subdirectory(activation)
 add_subdirectory(ann)
-add_subdirectory(delta)
 add_subdirectory(data)
 add_subdirectory(dim_find)
-add_subdirectory(error)
-add_subdirectory(prg)
-add_subdirectory(prop)
-add_subdirectory(sums)
+add_subdirectory(kernel)

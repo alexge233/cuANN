@@ -79,6 +79,7 @@ private:
     d_vector prop_layer (
                           unsigned int weights_begin,
                           unsigned int weights_end,
+                          unsigned int output_size,
                           const d_vector & input
                         ) const;
 

@@ -1,7 +1,7 @@
 #ifdef __CUDACC__
 #include <cuda.h>
 #endif
-
+#include <stdio.h>
 #include <thrust/random.h>
 #include <thrust/device_vector.h>
 #include <thrust/transform.h>

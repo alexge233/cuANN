@@ -14,7 +14,7 @@ namespace cuANN
 
 /// Find dimensions for grid, blocks and threads using 2D
 /// This is used to propagate vector to matrix vector (multiplication of vectors)
-struct dim_find_prop_mtx
+struct dim_find_2D
 {
     unsigned int num_blocks_x;
     unsigned int num_blocks_y;
@@ -22,7 +22,7 @@ struct dim_find_prop_mtx
     unsigned int block_threads_y;
 
     
-    dim_find_prop_mtx ( unsigned int x_size, unsigned int y_size )
+    dim_find_2D ( unsigned int x_size, unsigned int y_size )
     {
         if ( x_size < BLOCK_X )
         {

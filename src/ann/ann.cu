@@ -44,6 +44,7 @@ __host__ ann::ann (
         // weight count (update to keep track of previous weight index)
         unsigned int w_count = i_w;
 
+        // i = 1, because we have already set our input neurons
         for ( int i = 1; i <= hidden_layers_; i++ )
         {
             // This layer's hidden neurons
@@ -90,7 +91,7 @@ __host__ ann::ann (
     std::cout << "input neurons: " << input_neurons << std::endl;
     std::cout << "hidden neurons: " << hidden_neurons_ << " (per layer: " << per_layer_ << ")" << std::endl;
     std::cout << "output neurons: " << output_neurons << std::endl;
-    std::cout << "weights: " << weights_.size() << std::endl;
+    std::cout << "weights: " << weights_.size() << std::endl << std::endl;
 }
 
 
@@ -153,20 +154,21 @@ __host__ ann::h_vector ann::propagate ( ann::d_vector input ) const
     // If we have no hidden, then propagate through the weights from input to output layers
     for ( int i = 0; i < w_index_.size(); i++)
     {
-        // NOTE: TODO - Consider putting all code into a single kernel (0.2 release)
-        //              Consider putting the loop and all code into a single kernel
-
         unsigned int w_from = std::get<0>(w_index_[i]);
         unsigned int w_to = std::get<1>(w_index_[i]);
-    
-        // Update Out to equal the propagation of previous out.
-        auto sums = prop_layer( w_from,
-                                w_to,
-                                output );
+        unsigned int output_count = 0;
 
+        // Hidden Weights
+        if ( i < w_index_.size()-1 )
+            output_count = per_layer_;
+        // Output weights
+        else
+            output_count = output_neurons_;
+
+        // Update Out to equal the propagation of previous out.
+        auto sums = prop_layer( w_from, w_to, output_count, output );
         // Copy the sums as output
-        output = sums;
-    
+         output = sums;
         // Run the output through the activation function
         auto dim_B = dim_find_1D( output.size() );
         output_ptr = thrust::raw_pointer_cast( output.data() );
@@ -186,11 +188,13 @@ __host__ float ann::epoch (
                           )
 {
     thrust::device_vector<float> errors( total );
+
+    // POSSIBLE BUG: Delta == # of hidden neurons || input neurons ?
     unsigned int delta_size = hidden_neurons_ + output_neurons_;
     thrust::device_vector<float> layer_sums(delta_size);
     thrust::device_vector<float> delta_vals(delta_size);
 
-    // Iterate all training data once
+    // Iterate all training data once 
     for ( int i = 0; i < total; i++ )
     {
         // Assign our actual output to input - We will modify this
@@ -208,9 +212,15 @@ __host__ float ann::epoch (
         {
             auto w_from = std::get<0>(w_index_[k]);
             auto w_to = std::get<1>(w_index_[k]);
+            unsigned int output_count = 0;
+
+            if ( k < w_index_.size()-1 )
+                output_count = per_layer_;
+            else
+                output_count = output_neurons_;
 
             // Sums ( Input * Weights ) for Layer[k,j]
-            auto sums = prop_layer( w_from, w_to, actual_output );
+            auto sums = prop_layer( w_from, w_to, output_count, actual_output );
 
             thrust::copy( sums.begin(), sums.end(), layer_sums.begin() + sums_idx );
             sums_idx += sums.size();
@@ -222,10 +232,12 @@ __host__ float ann::epoch (
             sigmoid_kernel<<<dimB.num_blocks_x,dimB.block_threads_x>>>( output_ptr, actual_output.size() ); 
         }
 
+        // Get Ideal output
         thrust::device_vector<float> ideal( output.begin() + (output_len*i),
                                             output.begin() + (output_len*i) + output_len );
 
-        unsigned int from = layer_sums.size() - output_neurons_;
+        // output layer size
+        unsigned int size_o = layer_sums.size() - output_neurons_;
         float * delta_ptr = thrust::raw_pointer_cast( delta_vals.data() );
         float * sums_ptr = thrust::raw_pointer_cast( layer_sums.data() );
         float * ideal_ptr = thrust::raw_pointer_cast( ideal.data() );
@@ -233,24 +245,52 @@ __host__ float ann::epoch (
 
         // Calculate the Delta rule for last (Output) Layer
         auto dimC = dim_find_1D( output_neurons_ );
-        delta_output<<<dimC.num_blocks_x,dimC.block_threads_x>>>(sums_ptr,ideal_ptr,actual_ptr,delta_ptr,from );
+        delta_output<<<dimC.num_blocks_x,dimC.block_threads_x>>>(sums_ptr,ideal_ptr,actual_ptr,delta_ptr,size_o);
 
+        unsigned int size_k = output_neurons_;
         // Calculate the Delta rule for all hidden layers
-        for ( int k = (w_index_.size()-2); k >= 0; k-- )
+        // NOTE: k defines the weight column, NOT the layer!
+        for ( int k = w_index_.size()-1; k > 0; k-- )
         {
-            auto w_from = std::get<0>(w_index_[k]);
-            auto w_to = std::get<1>(w_index_[k]);
-            // NOTE: output delta calculation requires as many threads as there are output neurons
-            // TODO: run the delta_hidden_kernel - TODO: implement the delta_hidden_kernel
+            auto w_ik_from = std::get<0>(w_index_[k]);
+            auto w_ik_to = std::get<1>(w_index_[k]);
+
+            // size_i =  neuron/size per hidden layer
+            unsigned int size_i = per_layer_;
+            // index begins from 1st hidden layer -NOT from input
+            unsigned int index = size_i * (k-1);
+            // Calculate the pointers
+            float * w_ik = thrust::raw_pointer_cast( weights_.data() ) + w_ik_from;             // up to w_ik_from + w_ik_to
+            float * sum_ji  = thrust::raw_pointer_cast( layer_sums.data() ) + index;            // up to index + size_i
+            float * delta_i = thrust::raw_pointer_cast( delta_vals.data() ) + index;            // up to index + size_i
+            float * delta_k = thrust::raw_pointer_cast( delta_vals.data() ) + index + size_i;   // up to index+size_i+size_k
+
+            // Calculate weights per hidden neuron
+            unsigned int w_size = w_ik_to - w_ik_from;
+            unsigned int w_per_n = w_size / per_layer_;
+
+            // X grid is size_i, Y grid is size_k
+            auto dmD = dim_find_2D( size_i, size_k );
+            dim3 tPb1(dmD.block_threads_x,dmD.block_threads_y);
+            dim3 nB1(dmD.num_blocks_x,dmD.num_blocks_y);
+
+            // BUG: I can GUARANTEE That delta_hidden is giving out WRONG results
+            //      See the Kernel why.
+            // TODO: Break-up into 4 (FOUR) smaller kernels, and VALIDATE !!!
+            // WARNING: care with params: S[ij], δ[i], δ[k], W[ik], Weights Per Node
+            delta_hidden<<<nB1,tPb1,size_i*sizeof(float)>>>(sum_ji,delta_i,delta_k,w_ik,size_i,w_per_n);
+
+            // Update size_k
+            size_k = size_i;
         }
 
+        // TODO: Calculate Gradients
         // If doing online training, we need to update the weights now (after calculating the gradient)
     }
-
     // if we calculate the gradient for the Entire Epoch it is called BATCH learning (do it here)
 
     // TODO: Calculate for each Gradient for each weight
-    // TODO: Adjust Each weight, using the gradient
+    //       Adjust Each weight, using the gradient
 
     //return sum_errors  / num_errors;
     return 0.f;
@@ -260,46 +300,39 @@ __host__ float ann::epoch (
 __host__ ann::d_vector ann::prop_layer ( 
                                           unsigned int weights_begin,
                                           unsigned int weights_end,
+                                          unsigned int output_size,
                                           const ann::d_vector & input
                                        ) const
 {
     // TODO: ADD BIAS NEURON FOR EACH AND EVERY INPUT 
     //       MAKE SURE THAT ONE NEURON FIRES A VALUE OF 1.f
     //       Only way to do this, is to re-alloc (alloc) a new input vector here.
-    unsigned int weights_size = weights_end - weights_begin;
-    unsigned int w_per_i = weights_size / input.size();
+    unsigned int w_size = weights_end - weights_begin;
+    unsigned int w_per_i = w_size / output_size;
 
     // Get raw pointers for CUDA kernel
     const float * input_ptr = thrust::raw_pointer_cast( input.data() );
     const float * weight_ptr = thrust::raw_pointer_cast( weights_.data() ) + weights_begin;
 
     // Allocate Vectorized Matrix and get Raw pointer
-    thrust::device_vector<float> mtx_output( weights_size );
-    float * mtx_ptr = thrust::raw_pointer_cast( mtx_output.data() );
+    thrust::device_vector<float> mtx( w_size );
+    float * mtx_ptr = thrust::raw_pointer_cast( mtx.data() );
 
     // Calculate block theads and block number
     // Our X grid, is the Input size, our Y grid, is the number of weights per Input
-    auto dm_a = dim_find_prop_mtx( input.size(), w_per_i );
-
-    // set the threads per block and number of blocks
+    auto dm_a = dim_find_2D( input.size(), w_per_i );
     dim3 tPb1( dm_a.block_threads_x, dm_a.block_threads_y );
     dim3 nB1( dm_a.num_blocks_x, dm_a.num_blocks_y );
 
-    // Multiply Each Input, with its Row of Weights (Matrix of Weights) resulting in a Matrix of Sums (per Input/Row)
-    // This is a 2D Grid iterations, using as input Weights and Inputs, and the Matrix as output
-    // Width (Columns) is # weights per input, Height (Rows) is # inputs
-    prop_matrix<<<nB1,tPb1>>>( weight_ptr, input_ptr, mtx_ptr, w_per_i, input.size() );
+    // I[j] * W[i]
+    prop_kernel<<<nB1,tPb1>>>( weight_ptr, input_ptr, mtx_ptr, w_per_i );
 
-    // TODO: NOTE: consider putting all code (prop_matrix, sum_columns) into one kernel;
-    // Sums Row vector
-    thrust::device_vector<float> sums ( w_per_i );
+    thrust::device_vector<float> sums ( output_size );
     float * sums_ptr = thrust::raw_pointer_cast( sums.data() );
-    auto dm_b = dim_find_1D( w_per_i );
+    auto dm_b = dim_find_1D( output_size );
 
-    // Sum each column into a vector row : I[i] * W[i] = I[k]
-    // Sumarize Columns, using Matrix as Input, Sums vector as output, 
-    // where Width = Weights per I (# of Columns), and Height = # of Inputs (# of Rows )
-    sum_columns<<<dm_b.num_blocks_x,dm_b.block_threads_x>>>( mtx_ptr, sums_ptr, w_per_i, input.size() );
+    // Σ(I[j]*W[i])
+    sum_columns<<<dm_b.num_blocks_x,dm_b.block_threads_x>>>( mtx_ptr, sums_ptr, w_per_i );  
 
     return sums;
 }
@@ -312,9 +345,6 @@ __host__ ann::d_vector ann::output_errors (
 {
     if ( ideal.size() != actual.size() )
         throw std::runtime_error ( "cuANN::ann::output_error: ideal vector diff size from actual vector" );
-
-    // NOTE: Running this on GPU using device vectors is probably an overkill.
-    //       This should be profiled, and if found to offer no advantage, moved to host code only
     
     // This is PART of the MSE: (Ideal[i] - Actual[i])^2 + ...
     thrust::device_vector<float> errors( ideal.size() );

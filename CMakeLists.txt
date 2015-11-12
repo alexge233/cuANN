@@ -56,14 +56,9 @@ add_subdirectory(${SAMPLES})
 
 # Build the library
 cuda_add_library(cuANN
-                ${SRC}/activation/activation.cu
                 ${SRC}/ann/ann.cu
-                ${SRC}/error/error.cu
-                ${SRC}/delta/delta.cu
-                ${SRC}/prg/prg.cu
                 ${SRC}/data/data.cu
-                ${SRC}/prop/prop.cu
-                ${SRC}/sums/sums.cu
+                ${SRC}/kernel/kernel.cu
                 )
 
 # Then we may build the samples
