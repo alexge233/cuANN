@@ -26,52 +26,52 @@ struct prg
 
 
 /** 
- * Sigmoid Activation Kernel: f(x) = 1 / (1 + e^{-x} ).
+ * Sigmoid Activation Kernel: σ(x) = 1 / (1 + e^{-x} ).
  * @param input is an input device array,
  * @param size defines the size of the input array
  * @note this is a 1D grid kernel
  */
-__global__ void sigmoid_activation( 
-                                    float * input, 
-                                    unsigned int size 
-                                  );
+__global__ void sigmoid_activation ( float * input );
 
 /**
- * @brief Calculate the Sigmoid Derivative of: f'(Σ[ji])
+ * @brief Calculate the Sigmoid Prime of: σ'(Σ[ji]) = σ(x) * (1 - σ(x))
  * @param sum_ji is the Σ[ji]
  * @param output store the result
  * @note this is a 1D grid kernel
  */
-__global__ void sigmoid_derivative(
-                                    float * sum_ji,
-                                    float * output
-                                  );
+__global__ void sigmoid_prime (
+                                float * sum_ji,
+                                float * output
+                              );
 
 /** 
- * @brief Layer propagation: vector * matrix dot product
- * @note this is a 2D grid kernel
- * @warning the result is a Matrix, where each row represents the output from multiplying one input with all its weights
- *          the matrix is vectorised using thrust.
- *          the format is: Input[i]*Weight[i]
+ * @brief Layer propagation: `O[j] * W[i]`
+ * @param weight is the Weights Matrix, in Row-Major format, where a row corresponds to a node's weights
+ * @param input is a Column Vector, corresponding to `O[j]` (the output from previous nodes)
+ * @param output is a Row-Major matrix which stores the result
+ * @param w_size defines the Width of the Matrices (Weights & Output)
+ * @note 2D kernel: X grid is Input/Row iterator, Y grid is Column iterator
  */
 __global__ void forward_prop ( 
-                               const float * weight, // w[ji] 
-                               const float * input,  // a[j]
-                               float * output,       // a[i]
-                               unsigned int w_size   // weights per node
+                               const float * weight, // W[ji] 
+                               const float * input,  // O[j]
+                               float * output,       // I[i]
+                               unsigned int w_size   // weights per node (# of columns)
                              );
 
 /** 
- * @brief Summarize columns into a row vector
- * @param w_mtx
- * @param output
- * @param w_size
- * @note this is a 1D grid kernel
+ * @brief Summarize Matrix Columns to a Row Vector: `Σ( O[j] * W[i] )`
+ * @param w_mtx is  `O[j] * W[i]` from `forward_prop`
+ * @param output is `Σ( O[j] * W[i] )` e.g., the Sumed columns as a Row
+ * @param height defines the Height of the Matrix
+ * @param width defines the Width of the Matrix
+ * @note 1D grid: X is iterating Columns Index
  */
 __global__ void sum_columns ( 
                                 float * w_mtx,
                                 float * output, 
-                                unsigned int w_size
+                                unsigned int height,
+                                unsigned int width
                             );
 
 /**
@@ -102,21 +102,48 @@ __global__ void delta_product (
                                 float * w_ik,
                                 float * d_k,
                                 float * output,
-                                unsigned int w_size
+                                unsigned int width
                               );
+
+/**
+ * @brief Sum Rows of Matrix: `Σ( W[ik] * δ[k] )`
+ * @param w_ik_d is the matrix `W[ik] * δ[k]`
+ * @param delta_i stores the Summed rows for each node in layer i
+ * @param width defines the matrix width
+ */
+__global__ void delta_sum_rows (
+                                float * w_ik_d,
+                                float * delta_i,
+                                unsigned int width
+                               );
 
 /** 
  * @brief Delta Error of a hidden layer:  `δ[i] = f'( Σ[ji] ) * Σ( W[ik] * δ[k])`
  * @param prime_ji is array `F'( Σ( W[ji] * N[j] ) )`
  * @param delta_i is array `δ[i]` the current layer's deltas (one for each neuron), our output
- * @warning delta_i already contains the values of `Σ( W[ik] * δ[k])`
+ * @warning delta_i **must** contain the values of `Σ( W[ik] * δ[k])`
  */
 __global__ void delta_hidden (
                                float * prime_ji,
                                float * delta_i
                              );
 
-
+/**
+ * @brief Gradient Descent for all (but output) Neurons/Nodes: `∂E / ∂W[ik] = δ[k] * O[i]`
+ * @note This is a per-layer calculation, not a network global function (not for the entire network) 
+ * @param d_k is `δ[k]` the following layer's Node Delta
+ * @param i_i is `O[i]` the output of the activation function from preceeding layer
+ * @param g_ik is the product `∂E / ∂W[ik]` e.g., the gradient (function output)
+ * @param size_d defines the row width of the produced matrix
+ * @note X grid is Node Delta count, Y grid is O[i] count 
+ */
+__global__ void gradient_descent (
+                                    float * d_k,
+                                    float * o_i,
+                                    float * g_ik,
+                                    unsigned int size_d
+                                 );
+                                    
 /// Calculate the Output Error: (Ideal[i] - Actual[i])^2
 __global__ void squared_error ( 
                                 float * ideal,

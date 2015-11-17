@@ -3,31 +3,57 @@
 namespace cuANN
 {
 
-__global__ void sigmoid_activation( 
-                                    float * input, 
-                                    unsigned int size 
-                                  )
+__device__ __constant__ float Euler = 2.71828182845904523536;
+
+__global__ void sigmoid_activation( float * input )
 {
+    // Iterate Input vector
     int x = blockIdx.x * blockDim.x + threadIdx.x;
-    if ( x < size )
-    {
-        float t = input[x];
-        input[x]  = __fdividef( 1.f,(1.f + __expf(-1.f*t)));
-        //printf("F(Σ[ji]): %f\n",input[x]);
-    }
+
+    float _x_ = input[x];
+
+    // -X: Neg X
+    float x_neg = __fmul_rz( -1.f, _x_ );
+
+    // Y: Euler Pow To X Negative
+    float e_to_x_neg = __powf( Euler, x_neg );
+
+    // 1 + Euler^( -X )
+    float denom = __fadd_rz( 1.f, e_to_x_neg );
+
+    // 1 / 1 + Euler^( -X )
+    input[x]  = __fdividef( 1.f, denom );
+
+//    printf("x: %f, -x: %f, E^(-x): %f, 1+E^(-x): %f, σ(x): %f\n",
+//            _x_,x_neg,e_to_x_neg,denom,input[x]);
 }
 
-__global__ void sigmoid_derivative(
-                                    float * sum_ji,
-                                    float * output
-                                  )
+__global__ void sigmoid_prime  (
+                                  float * sum_ji,
+                                  float * output
+                               )
 {
+    // Iterate Vector `Σ[ji]`
     int x = blockIdx.x * blockDim.x + threadIdx.x;
 
-    // f'(Σ[ji]) - Sigmoid Prime of Σ[ji]
-    float t = __fdividef( 1.f, (1.f + __expf(-1.f*sum_ji[x])));
-    output[x] = t * (1.f - t);
-    //printf("F'(Σ[ji]): %f\n",output[x]);
+    // -X: Neg X
+    float x_neg = __fmul_rz( -1.f, sum_ji[x] );
+
+    // Y: Euler Pow To X Negative
+    float e_to_x_neg = __powf( Euler, x_neg );
+
+    // 1 + Euler^( -X )
+    float denom = __fadd_rz( 1.f, e_to_x_neg );
+
+    // 1 / 1 + Euler^( -X )
+    float sig_x  = __fdividef( 1.f, denom );
+
+    // Sigmoid Prime: σ(x) * (1 - σ(x))
+    output[x] = __fmul_rz( sig_x, (1.f - sig_x) );
+
+//    printf("x: %f, -x: %f, E^(-x): %f, 1+E^(-x): %f, σ(x): %f, σ'(x): %f\n",
+//            sum_ji[x],x_neg,e_to_x_neg,denom,sig_x,output[x]);
+
 }
 
 __global__ void forward_prop ( 
@@ -38,30 +64,34 @@ __global__ void forward_prop (
                              )
 {
     // X is input size (w_size)
-    // Y is weights per neuron/node (i_size)
     int x = blockIdx.x * blockDim.x + threadIdx.x; 
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    // Y is weights per neuron/node (i_size)
+    int y = blockIdx.y * blockDim.y + threadIdx.y;   
+
+    //  I[j] * W[i] - Row-Major Matrix
+    output[w_size*x+y] = __fmul_rz(input[x], weight[w_size * x + y]);
     
-    //  I[j] * W[i]
-    output[w_size * x + y] = __fmul_rz(input[x], weight[w_size * x + y]);
     //printf("X: %d, Y: %d, I: %f, W: %f, O: %f\n", 
     //       x, y, input[x], weight[w_size * x + y], output[w_size * x + y] );
 }
 
-//TODO: WARNING If we obtain a value that is in the "hundreads" then the BUG is probably in here
+//TODO: BUG: Sum Coumns NOT ROWS!
 __global__ void sum_columns ( 
                                 float * w_mtx,
                                 float * output, 
-                                unsigned int w_size
+                                unsigned int height,
+                                unsigned int width
                             )
 {
-    // X thread iterates the rows (the output)
+    // X thread iterates Columns and sums their Row values
     int x = blockIdx.x * blockDim.x + threadIdx.x; 
-    float total;
-    for ( int y = 0; y < w_size; y++ )
+   
+   float total;
+    for ( int y = 0; y < height; y++ )
     {
-        //printf("M: %f\n",w_mtx[ y + w_size * x]);
-        total = __fadd_rz( total, w_mtx[ y + w_size * x]);
+//        printf("X: %d, O[j]*W[i]: %f\n",x,w_mtx[y*width+x]);
+        total = __fadd_rz( total, w_mtx[y*width+x]);
     }
     output[x] = total;
 }
@@ -74,15 +104,29 @@ __global__ void delta_output (
                                 unsigned int index
                              )
 {
+    // x is the output neuron/node count (e.g., length of actual & ideal)
     int x = blockIdx.x * blockDim.x + threadIdx.x;
+
     float error = -1.f * ( actual[x] - ideal[x]);
-    
-    // Sigmoid Prime
-    float sig = __fdividef( 1.f, (1.f + __expf(-1.f*sum[x+index])));
-    float primed = sig * ( 1.f - sig );
-    
-    // -E * F'(Actual-ideal)
+
+    // -X: Neg X
+    float x_neg = __fmul_rz( -1.f, sum[x+index] );
+
+    // Y: Euler Pow To X Negative
+    float e_to_x_neg = __powf( Euler, x_neg );
+
+    // 1 + Euler^( -X )
+    float denom = __fadd_rz( 1.f, e_to_x_neg );
+
+    // 1 / 1 + Euler^( -X )
+    float sig_x  = __fdividef( 1.f, denom );
+
+    // Sigmoid Prime: σ(x) * (1 - σ(x))
+    float primed = __fmul_rz( sig_x, (1.f - sig_x) );
+
+    // -E * σ'(Actual-Ideal)
     delta[x+index] = error * primed;
+
     //printf( "Ideal: %f, Actual: %f, Out: %f, -Error: %f, F'(Out): %f, Delta: %f\n",
     //         ideal[x], actual[x], sum[x+index],error,primed,delta[x+index]);
 }
@@ -91,18 +135,40 @@ __global__ void delta_product (
                                 float * w_ik,
                                 float * d_k,
                                 float * output,
-                                unsigned int w_size
+                                unsigned int width
                               )
 {
     // X is layer[i] nodes (size_i)
     int x = blockIdx.x * blockDim.x + threadIdx.x;
+
     // Y is layer[k] nodes (size_k) == d_k == w_per_n
     int y = blockIdx.y * blockDim.y + threadIdx.y;
 
-    //  W[ik] * δ[k]
-    output[w_size * x + y] = __fmul_rz( d_k[y], w_ik[w_size * x + y]);
-    //printf("X: %d, Y: %d, δ[k]: %f, w[ik]: %f, dot: %f\n", 
+    //  W[ik] * δ[k] - Row-Major Matrix
+    output[width*x+y] = __fmul_rz( d_k[y], w_ik[width*x+y]);
+    
+    //printf("X:%d,Y:%d, δ[k]: %f, w[ik]: %f, dot: %f\n", 
     //        x, y, d_k[y], w_ik[w_size * x + y], output[w_size * x + y] );
+}
+
+__global__ void delta_sum_rows (
+                                 float * w_ik_d,
+                                 float * delta_i,
+                                 unsigned int width
+                               )
+{
+    // X thread iterates Rows and Sums the respective Column values
+    int x = blockIdx.x * blockDim.x + threadIdx.x; 
+   
+    float total = 0.f;
+    for ( int y = 0; y < width; y++ )
+    {
+        //printf("X:%d, Σ: %.9f + %.9f\n",x,total,w_ik_d[x*width+y]);
+        total = __fadd_rz( total, w_ik_d[x*width+y]);
+    }
+
+    delta_i[x] = total;
+    //printf("X:%d, δ[i]: %.9f\n",x,delta_i[x]);
 }
 
 __global__ void delta_hidden (
@@ -116,9 +182,32 @@ __global__ void delta_hidden (
     // δ[i] = f'( Σ[ji]) * Σ(w[ik] * δ[k])
     // NOTE: delta_i ALREADY contains `Σ(w[ik] * δ[k])`
     float rhs = delta_i[x];
+
+    // δ[i] = σ'( Σ[ji]) * Σ(w[ik] * δ[k])
     delta_i[x] = __fmul_rz( prime_ji[x], rhs );
+
     //printf("X %d, F'(Σ[ji]): %f, Σ(w[ik]*δ[k]): %f, δ[i]: %f\n",
     //        x, prime_ji[x], rhs, delta_i[x]);
+}
+
+__global__ void gradient_descent (
+                                    float * d_k,
+                                    float * o_i,
+                                    float * g_ik,
+                                    unsigned int size_d
+                                 )
+{
+    // X = Node Delta Count (layer k)
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // Y = Node Output Count (layer i)
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    // Row-Major Matrix
+    g_ik[size_d*x+y] = __fmul_rz( d_k[x], o_i[y]);
+
+    //printf("X: %d, Y: %d, δ[k]: %f, O[i]: %f, dot: %f\n", 
+    //        x, y, d_k[x], o_i[y], (d_k[x]*o_i[y]) );
 }
 
 __global__ void squared_error ( 

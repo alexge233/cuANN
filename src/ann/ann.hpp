@@ -56,17 +56,17 @@ private:
     /**
      * @brief This is a Training Epoch
      * @return Mean-Squared Error
-     * @param input is a continous memory of many input vectors,
-     * which are separated at interval `input_len`.
-     * @param output is also a continous memory of many output vectors,
-     * also separated at interval `output_len`
+     * @param input is a continous memory of many input vectors separated at interval `input_len`.
+     * @param output is also a continous memory of many output vectors, separated at interval `output_len`
+     * @param online defines Online Learning (if set to false, it is Batch Learning)
      */
     float epoch ( 
-                    d_vector & input,
+                    h_vector & input,
                     unsigned int input_len,
                     h_vector & output,
                     unsigned int output_len,
-                    unsigned int total
+                    unsigned int total,
+                    bool online
                 );
 
 
@@ -79,7 +79,6 @@ private:
     d_vector prop_layer (
                           unsigned int weights_begin,
                           unsigned int weights_end,
-                          unsigned int output_size,
                           const d_vector & input
                         ) const;
 
