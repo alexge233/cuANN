@@ -24,6 +24,15 @@ struct prg
     }
 };
 
+/// Non-Zero predicate for thrust::count
+struct non_zero
+{
+    __host__ __device__ bool operator()( const float & x )
+    {
+      return x != 0.0;
+    }
+};
+
 
 /** 
  * Sigmoid Activation Kernel: σ(x) = 1 / (1 + e^{-x} ).

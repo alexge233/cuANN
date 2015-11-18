@@ -51,14 +51,19 @@ public:
      */
     h_vector propagate ( d_vector input ) const;
 
-private:
+protected:
 
     /**
      * @brief This is a Training Epoch
-     * @return Mean-Squared Error
      * @param input is a continous memory of many input vectors separated at interval `input_len`.
      * @param output is also a continous memory of many output vectors, separated at interval `output_len`
      * @param online defines Online Learning (if set to false, it is Batch Learning)
+     * @return MSE: Mean-Square Error
+     * 
+     * Calculate the Delta Rule: `σ'( Σ[ji] ) * Σ( W[ik] * δ[k] )`
+     * Using Sigmoid Prime σ'(x) = σ(x) * ( 1 - σ(x) )
+     * Then get the Gradient of each Weight: `∂E / ∂W[ik]`
+     * Finally, use Back-Propagation (Either Online or Batch)
      */
     float epoch ( 
                     h_vector & input,
@@ -69,12 +74,20 @@ private:
                     bool online
                 );
 
+    /**
+     * @brief The Back-Propagation algorithm
+     * @param gradients is `∂E / ∂W[ik]` the weight gradient
+     * 
+     * The weight update: `Δw(t) = ε * ( ∂E / ∂W[ik] ) + α * ( Δw(t-1) )`
+     * Changes weights using above rule, and stores the changes as `Δw(t-1)`
+     */
+    void back_prop ( d_vector & gradients );
 
-    /// Propagate input via single layer
+    /// @brief Propagate input via single layer: `O[j] * W[i]`
     /// @param weights_begin is the weights[index] start range
     /// @param weights_end is the weights[index] end range
     /// @param input is the actual input vector (device mem)
-    /// @return the Sum of (Input * Weight)
+    /// @return the Sum: `Σ( O[j] * W[i]`
     /// @warning the return vector is NOT sigmoid activated!
     d_vector prop_layer (
                           unsigned int weights_begin,
@@ -89,6 +102,7 @@ private:
                                d_vector actual
                             ) const;
 
+private:
 
     // ANN Private Vars
     unsigned int input_neurons_;
@@ -97,6 +111,9 @@ private:
     unsigned int hidden_layers_;
     unsigned int per_layer_;
 
+    float alpha_;
+    float epsilon_;
+
     /// WARNING: This is a vectorised Matrix!
     ///                - This vector will contain ALL weights
     ///                - in blocks of `layers_`, e.g.: 
@@ -104,6 +121,9 @@ private:
     ///                -    second hidden vector weights will be from [per_layer_] - [2 * per_layer_]
     ///                -    Furthermore, within a layer, they go as: [H1W2],[H2W2],etc.
     thrust::device_vector<float> weights_;
+
+    /// The old (previous) Delta Updates `Δw(t-1)` respective to each weight
+    thrust::device_vector<float> updates_;
 
     /// This index keeps track of where Weights begin and end (per layer increments)
     std::vector<std::pair<int,int>> w_index_;

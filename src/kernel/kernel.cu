@@ -24,7 +24,7 @@ __global__ void sigmoid_activation( float * input )
     // 1 / 1 + Euler^( -X )
     input[x]  = __fdividef( 1.f, denom );
 
-//    printf("x: %f, -x: %f, E^(-x): %f, 1+E^(-x): %f, σ(x): %f\n",
+//    printf("x: %.9g, -x: %.9g, E^(-x): %.9g, 1+E^(-x): %.9g, σ(x): %.9g\n",
 //            _x_,x_neg,e_to_x_neg,denom,input[x]);
 }
 
@@ -51,7 +51,7 @@ __global__ void sigmoid_prime  (
     // Sigmoid Prime: σ(x) * (1 - σ(x))
     output[x] = __fmul_rz( sig_x, (1.f - sig_x) );
 
-//    printf("x: %f, -x: %f, E^(-x): %f, 1+E^(-x): %f, σ(x): %f, σ'(x): %f\n",
+//    printf("x: %.9g, -x: %.9g, E^(-x): %.9g, 1+E^(-x): %.9g, σ(x): %.9g, σ'(x): %.9g\n",
 //            sum_ji[x],x_neg,e_to_x_neg,denom,sig_x,output[x]);
 
 }
@@ -72,8 +72,8 @@ __global__ void forward_prop (
     //  I[j] * W[i] - Row-Major Matrix
     output[w_size*x+y] = __fmul_rz(input[x], weight[w_size * x + y]);
     
-    //printf("X: %d, Y: %d, I: %f, W: %f, O: %f\n", 
-    //       x, y, input[x], weight[w_size * x + y], output[w_size * x + y] );
+//    printf("X: %d, Y: %d, I: %.9g, W: %.9g, O: %.9g\n", 
+//            x, y, input[x], weight[w_size * x + y], output[w_size * x + y] );
 }
 
 //TODO: BUG: Sum Coumns NOT ROWS!
@@ -90,7 +90,7 @@ __global__ void sum_columns (
    float total;
     for ( int y = 0; y < height; y++ )
     {
-//        printf("X: %d, O[j]*W[i]: %f\n",x,w_mtx[y*width+x]);
+//        printf("X: %d, O[j]*W[i]: %.9g\n",x,w_mtx[y*width+x]);
         total = __fadd_rz( total, w_mtx[y*width+x]);
     }
     output[x] = total;
@@ -107,7 +107,8 @@ __global__ void delta_output (
     // x is the output neuron/node count (e.g., length of actual & ideal)
     int x = blockIdx.x * blockDim.x + threadIdx.x;
 
-    float error = -1.f * ( actual[x] - ideal[x]);
+    // Calculate the Negative Error: -(Actual - Ideal)
+    float neg_error = __fmul_rz( -1.f, ( actual[x] - ideal[x]) );
 
     // -X: Neg X
     float x_neg = __fmul_rz( -1.f, sum[x+index] );
@@ -124,11 +125,11 @@ __global__ void delta_output (
     // Sigmoid Prime: σ(x) * (1 - σ(x))
     float primed = __fmul_rz( sig_x, (1.f - sig_x) );
 
-    // -E * σ'(Actual-Ideal)
-    delta[x+index] = error * primed;
+    // -E * σ'(Σ(O[i])
+    delta[x+index] = __fmul_rz( neg_error, primed );
 
-    //printf( "Ideal: %f, Actual: %f, Out: %f, -Error: %f, F'(Out): %f, Delta: %f\n",
-    //         ideal[x], actual[x], sum[x+index],error,primed,delta[x+index]);
+//    printf( "Ideal: %.9g, Actual: %.9g, Out: %.9g, -Error: %.9g, F'(Out): %.9g, Delta: %.9g\n",
+//             ideal[x], actual[x], sum[x+index],neg_error,primed,delta[x+index]);
 }
 
 __global__ void delta_product (
@@ -147,8 +148,8 @@ __global__ void delta_product (
     //  W[ik] * δ[k] - Row-Major Matrix
     output[width*x+y] = __fmul_rz( d_k[y], w_ik[width*x+y]);
     
-    //printf("X:%d,Y:%d, δ[k]: %f, w[ik]: %f, dot: %f\n", 
-    //        x, y, d_k[y], w_ik[w_size * x + y], output[w_size * x + y] );
+//    printf("X:%d,Y:%d, δ[k]: %.9g, w[ik]: %.9g, dot: %.9g\n", 
+//            x, y, d_k[y], w_ik[width*x+y], output[width*x+y]);
 }
 
 __global__ void delta_sum_rows (
@@ -168,7 +169,7 @@ __global__ void delta_sum_rows (
     }
 
     delta_i[x] = total;
-    //printf("X:%d, δ[i]: %.9f\n",x,delta_i[x]);
+//    printf("X:%d, δ[i]: %.9g\n",x,delta_i[x]);
 }
 
 __global__ void delta_hidden (
@@ -186,8 +187,8 @@ __global__ void delta_hidden (
     // δ[i] = σ'( Σ[ji]) * Σ(w[ik] * δ[k])
     delta_i[x] = __fmul_rz( prime_ji[x], rhs );
 
-    //printf("X %d, F'(Σ[ji]): %f, Σ(w[ik]*δ[k]): %f, δ[i]: %f\n",
-    //        x, prime_ji[x], rhs, delta_i[x]);
+//    printf("X %d, F'(Σ[ji]): %.9g, Σ(w[ik]*δ[k]): %.9g, δ[i]: %.9g\n",
+//            x, prime_ji[x], rhs, delta_i[x]);
 }
 
 __global__ void gradient_descent (
@@ -206,8 +207,8 @@ __global__ void gradient_descent (
     // Row-Major Matrix
     g_ik[size_d*x+y] = __fmul_rz( d_k[x], o_i[y]);
 
-    //printf("X: %d, Y: %d, δ[k]: %f, O[i]: %f, dot: %f\n", 
-    //        x, y, d_k[x], o_i[y], (d_k[x]*o_i[y]) );
+//    printf("X: %d, Y: %d, δ[k]: %.9g, O[i]: %.9g, dot: %.9g\n", 
+//            x, y, d_k[x], o_i[y], (d_k[x]*o_i[y]) );
 }
 
 __global__ void squared_error ( 

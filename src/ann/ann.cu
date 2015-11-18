@@ -91,11 +91,16 @@ __host__ ann::ann (
     std::cout << "input neurons: " << input_neurons << std::endl;
     std::cout << "hidden neurons: " << hidden_neurons_ << " (per layer: " << per_layer_ << ")" << std::endl;
     std::cout << "output neurons: " << output_neurons << std::endl;
-    std::cout << "weights: " << weights_.size() << std::endl << std::endl;
+    std::cout << "weights: " << weights_.size() << std::endl;
 
-    for ( const auto & val : weights_ )
-        std::cout << val << std::endl;
-    std::cout << std::endl;
+//    for ( int k = 0; k < w_index_.size(); k++)
+//    {
+//        auto from = std::get<0>(w_index_[k]);
+//        auto to   = std::get<1>(w_index_[k]);
+//        for ( int x = from; x < to; x++ )
+//            std::cout << weights_[x] << " ";
+//        std::cout << std::endl;
+//    }
 }
 
 __host__ float ann::train (
@@ -126,6 +131,8 @@ __host__ float ann::train (
         throw std::runtime_error("input rows not equal to output rows");
 
     float mse = 0.f;
+
+    // TODO: Initialise and Resize the vector `updates_`
 
     // Iterate epochs and compare mse
     for ( int i = 0; i < epochs; i++ )
@@ -190,8 +197,6 @@ __host__ float ann::epoch (
 {
     // Calculate Delta Error size
     unsigned int delta_size = hidden_neurons_+output_neurons_;
-    // ??
-    thrust::device_vector<float> errors( total );
 
     // Layer Sums: Σ( O[j] * W[ij] )
     thrust::device_vector<float> layer_sums(delta_size);
@@ -209,10 +214,11 @@ __host__ float ann::epoch (
     thrust::device_vector<float> ideal( output_neurons_ );
     float * ideal_ptr = thrust::raw_pointer_cast( ideal.data() );
 
-    // TODO: I need to Save Delta(t-1) values, previous delta values
-
     // Store the Output (O[i]) for each Neuron/Node
     thrust::device_vector<float> layer_outputs(input_neurons_+hidden_neurons_+output_neurons_);
+
+    // Allocate device memory for gradients (NOTE: Row Major Matrix)
+    thrust::device_vector<float> gradients( weights_.size() );
 
     // Wait for all allocations
     cudaDeviceSynchronize();
@@ -224,16 +230,19 @@ __host__ float ann::epoch (
         thrust::device_vector<float> actual_output( input.begin() + (input_len*i), 
                                                     input.begin() + (input_len*i) + input_len );
         float * output_ptr = thrust::raw_pointer_cast( actual_output.data() );
-         
+        cudaDeviceSynchronize();
+
         // Activation Function for Input Values
         auto dimA = dim1D(actual_output.size());
         sigmoid_activation<<<dimA.num_blocks_x,dimA.block_threads_x>>>( output_ptr );
+        cudaDeviceSynchronize();
+
         thrust::copy( actual_output.begin(), actual_output.end(), layer_outputs.begin() );
         cudaDeviceSynchronize();
 
         // Propagate through every layer (We need the Actual Output of the Network)
         unsigned int sums_idx = 0;
-        unsigned int out_idx = 2;
+        unsigned int out_idx = actual_output.size();
         for ( int k = 0; k < w_index_.size(); k++)
         {
             unsigned int w_from = std::get<0>(w_index_[k]);
@@ -248,6 +257,7 @@ __host__ float ann::epoch (
             // Activate Output: σ( Σ( O[j] * W[ji] ) )
             auto dimA2 = dim1D(actual_output.size());
             sigmoid_activation<<<dimA2.num_blocks_x,dimA2.block_threads_x>>>( output_ptr );
+            cudaDeviceSynchronize();
 
             thrust::copy( actual_output.begin(),actual_output.end(), layer_outputs.begin() + out_idx );
             out_idx += actual_output.size();
@@ -263,11 +273,11 @@ __host__ float ann::epoch (
         // index of output layer's Sums
         unsigned int size_o = layer_sums.size() - output_neurons_;
 
-        // Calculate the Delta rule for last (Output) Layer
+        // Calculate the Delta nodes of the Output Layer: `-E * σ'(Σ(O[i])`
         auto dimB = dim1D(output_neurons_);
         delta_output<<<dimB.num_blocks_x,dimB.block_threads_x>>>(sums_ptr,ideal_ptr,output_ptr,delta_ptr,size_o);
 
-        // Calculate the Primed Sum: f'(Σ[ji]) for all (hidden) layers
+        // Calculate the Primed Sum: `σ'(Σ[ji])` for all hidden layers
         auto dimC = dim1D(layer_sums.size());
         sigmoid_prime<<<dimC.num_blocks_x,dimC.block_threads_x>>>(sums_ptr,primed_ptr);
         cudaDeviceSynchronize();
@@ -279,8 +289,10 @@ __host__ float ann::epoch (
         {
             auto w_ik_from = std::get<0>(w_index_[k]);
             auto w_ik_to = std::get<1>(w_index_[k]);
+            
             // size_i =  nodes per hidden layer
             unsigned int size_i = per_layer_;
+            
             // index begins from 1st hidden layer - NOT from input
             unsigned int index = size_i * (k-1);
 
@@ -304,7 +316,8 @@ __host__ float ann::epoch (
 
             // W[ik] * δ[k]
             delta_product<<<numBlocks,threadsPerBlock>>>( w_ik, delta_k, mtx_ptr, width );
-            
+            cudaDeviceSynchronize();
+
             // Σ( W[ik] * δ[k] ) - Sum Rows of Matrix:  W[ik] * δ[k]
             // NOTE: We save sums in delta_i, we will update their values in the next kernel
             auto dimE = dim1D( size_i );
@@ -317,10 +330,6 @@ __host__ float ann::epoch (
             // Update size_k
             size_k = size_i;
         }
-
-        // Allocate device memory for gradients (NOTE: Row Major Matrix)
-        thrust::device_vector<float> gradients( weights_.size() );
-        cudaDeviceSynchronize();
 
         // Compute (for each δ) the partial derivative `∂E / ∂W[ik]` = δ[k] * O[i]
         // Gradients are equal to weights, Each gradient is allocated to a Weight (W[ik])
@@ -358,20 +367,33 @@ __host__ float ann::epoch (
             delta_idx += node_deltas;
             output_idx += output_vals;
         }
-        // If doing online training, we need to update the weights now
-
-        // WARNING - Some gradients appear to be zero!!! I don't know if this is because they are zero
-        //           Or because they are so small that a float can't capture them
-        std::cout << std::endl << "Pattern Gradients" << std::endl;
-        for ( const auto & val : gradients )
-            std::cout << val << std::endl;
+//        std::cout << "Gradients: " << gradients.size() << " NNZ: " << thrust::count_if( gradients.begin(), 
+//                                                                                        gradients.end(), 
+//                                                                                        non_zero() ) << std::endl;
+        // If Online-Training, do back-prop here, else we need to SUM the gradients.
+        // Batch training requires Summed Gradients !
     }
+    // if doing BATCH, do back-prop here
 
-    // if doing BATCH, update weights at end of Epoch 
-
-    // TODO: return MSE
+    // TODO: return MSE: calculate for the entirety of our input patterns, what the MSE was/is
     return 0.f;
 }
+
+__host__ void ann::back_prop ( d_vector & gradients )
+{
+    // TODO: See Heaton's Video, Understand the formula, and then implement it
+    //       This is the weight update formula:
+    //       Δw(t) = ε * ( ∂E / ∂W[ik] ) + α * ( Δw(t-1) )
+    //
+    // TODO: Compute each weight update, and then change the weight, storing the update value
+    //       Take care storing in the private memory: `updates_`
+    //
+    // NOTE: If we have no previous weight update `Δw(t-1)` use zero instead
+    //
+    // NOTE: We simply add the weight update value to the weight.
+    //       If negative, the weight becomes smaller, if positive it will increase
+}
+
 
 __host__ ann::d_vector ann::prop_layer ( 
                                           unsigned int weights_begin,
