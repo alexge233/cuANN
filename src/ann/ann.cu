@@ -75,8 +75,8 @@ __host__ ann::ann (
     }
    
     // low and upper random bounds
-    float upper = 1.;
-    float lower = -1.;
+    float upper = .1f;
+    float lower = -.1f;
 
     thrust::counting_iterator<float> index_sequence_begin(0);
     auto now = std::chrono::system_clock::now();

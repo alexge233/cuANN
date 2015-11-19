@@ -12,14 +12,14 @@ int main (void)
     cuANN::data train_data = cuANN::data( "xor.data" );
 
     // Train on this data, MSE, Epochs
-    float mse = xor_net.train( train_data, 0.05f, 10000, 1000, false );
+    float mse = xor_net.train( train_data, 0.05f, 50000, 5000, false );
     std::cout << "Trained Network with MSE: " << mse << std::endl;
 
     std::cout << "Testing with [1,0] as input" << std::endl;
     float x_in[2] {1.f, 0.f};
     thrust::device_vector<float> in_vec(x_in,x_in+2);
     thrust::device_vector<float> output = xor_net.propagate( in_vec );
-    std::cout << "output" << std::endl;
+    std::cout << "output: ";
     for ( auto val : output )
         std::cout << val << std::endl;
 
