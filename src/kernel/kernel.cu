@@ -76,7 +76,6 @@ __global__ void forward_prop (
 //            x, y, input[x], weight[w_size * x + y], output[w_size * x + y] );
 }
 
-//TODO: BUG: Sum Coumns NOT ROWS!
 __global__ void sum_columns ( 
                                 float * w_mtx,
                                 float * output, 
@@ -211,6 +210,48 @@ __global__ void gradient_descent (
 //            x, y, d_k[x], o_i[y], (d_k[x]*o_i[y]) );
 }
 
+__global__ void sum_gradients (
+                                float * gradient,
+                                float * new_value
+                              )
+{
+    // X Grid iterates all gradient values 
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // A Simple summation
+    gradient[x] = __fadd_rz( gradient[x], new_value[x] );
+}
+
+__global__ void back_prop (
+                            float * weight,
+                            float * gradient,
+                            float * update,
+                            float alpha,
+                            float epsilon
+                         )
+{
+    // X Grid iterates weight, gradient and update (all same size)    
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // ε * ( ∂E / ∂W[ik] )
+    float lhs = __fmul_rz( epsilon, gradient[x] ); 
+
+    // α * ( Δw(t-1) )
+    float rhs = __fmul_rz( alpha, update[x] );
+
+    // Δw(t) = ε * ( ∂E / ∂W[i] ) + α * ( Δw(t-1) )
+    float d_w = __fadd_rz( lhs, rhs );
+
+    // Update weight: W[i] = W[i] + Δw(t)
+    weight[x] = __fadd_rz( weight[x], d_w );
+
+    // Set `Δw(t-1) = Δw(t)`
+    update[x] = d_w;
+
+//    printf("X: %d, Δw(t): %.9g, ε: %.9g, ∂E/∂W[i] %.9g, α: %.9g, Δw(t-1): %.9g, W[i]: %.9g\n", 
+//            x, d_w, epsilon, gradient[x], alpha, update[x], weight[x] );
+}
+
 __global__ void squared_error ( 
                                 float * ideal,
                                 float * actual, 
@@ -218,9 +259,10 @@ __global__ void squared_error (
                             )
 {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
-
     float diff = ideal[x] - actual[x];
-    errors[x] = diff * diff;
+    errors[x] = __fmul_rz( diff, diff );
+    //printf("X:%d,Ideal: %.9g, Actual: %.9g, Diff: %.9g, Error: %.9g\n",
+    //        x,ideal[x],actual[x],diff,errors[x]);
 }
 
 };

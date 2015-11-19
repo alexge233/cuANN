@@ -1,19 +1,5 @@
-
+19.11.2015
 TODO:
-        1. calculate delta layer for output
-
-        2. calculate delta lalyer for hidden layers
-
-        3. calculate gradient descents for each weight
-
-        4. update weights at every epoch (or at every input pattern)
-        
-NOTES:
-
-        I might be able to do propagation, in a single kernel
-        either by using a for-loop for each layer (and global weight array)
-        or perhaps by using a 3D grid, where the z coordinate represents the layer.
-
-        I should also be able to do delta error calculations
-        using a shared array.
-        This would hold the sum of w[ik] * d[k] for each neuron.
+        1. (RE)VALIDATE the Network source-code, it seems to be getting stuck at specific MSE's
+        2. Create (de)serialisation for class ann: Saving and Loading (Using BOOST or CEREAL)
+        3. Optimise the code: only 35% on GPU is used, maybe I need to Multi-thread the training?

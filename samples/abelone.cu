@@ -6,9 +6,11 @@ int main (void)
 {
     std::cout << "Abelone Test" << std::endl;
 
-    cuANN::ann network = cuANN::ann(  10, 20, 4, 1 );
+    // WARNING: Too many hidden layers may return zero gradients!
+    cuANN::ann network = cuANN::ann(  10, 20, 2, 1 );
     cuANN::data train_data = cuANN::data( "abelone.train" );
-    network.train( train_data, 0.02f, 1 ); 
+    auto mse = network.train( train_data, 0.02f, 1000, 100, false ); 
+    std::cout << "Trained Abelone with MSE: " << mse << std::endl;
 
     return 0;
 }

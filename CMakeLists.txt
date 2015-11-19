@@ -45,9 +45,9 @@ set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};#-gencode arch=compute_20,code=sm_20
                                        -gencode arch=compute_30,code=sm_30;
                                        -std=c++11;
                                        -DVERBOSE;
-                                       -DTHRUST_DEBUG;
-                                       #-DNDEBUG;
-                                       #-O3;
+                                       #-DTHRUST_DEBUG;
+                                       -DNDEBUG;
+                                       -O3;
                                        -Xcompiler -fPIC;
                                        --use_fast_math)
 

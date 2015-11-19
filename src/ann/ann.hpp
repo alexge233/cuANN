@@ -34,15 +34,18 @@ public:
 
     /**
      * @brief Train the Network using the training data
+     * @param train_data is used to train the network
      * @param mse_stop will stop training if that MSE is achieved
      * @param epochs denotes for how many epochs will the network be trained
-     * @param learning denotes the learning rate of the Gradient Descent
-     * @param momentum is the momentum used to affect previous Gradients
+     * @param reports defines the interval of epochs used to report on MSE on screen (use 0 for no reports)
+     * @param online defines online training if TRUE, or batch training if FALSE
      */
     float train (
                   const cuANN::data & train_data,
                   float mse_stop,
-                  unsigned int epochs
+                  unsigned int epochs,
+                  unsigned int reports,
+                  bool online
                 );
     
     /**
@@ -74,15 +77,6 @@ protected:
                     bool online
                 );
 
-    /**
-     * @brief The Back-Propagation algorithm
-     * @param gradients is `∂E / ∂W[ik]` the weight gradient
-     * 
-     * The weight update: `Δw(t) = ε * ( ∂E / ∂W[ik] ) + α * ( Δw(t-1) )`
-     * Changes weights using above rule, and stores the changes as `Δw(t-1)`
-     */
-    void back_prop ( d_vector & gradients );
-
     /// @brief Propagate input via single layer: `O[j] * W[i]`
     /// @param weights_begin is the weights[index] start range
     /// @param weights_end is the weights[index] end range
@@ -95,16 +89,8 @@ protected:
                           const d_vector & input
                         ) const;
 
-    /// Calculate Output's Squared Errors
-    /// @param ideal output will be compared to @param actual and error is squared
-    d_vector output_errors (
-                               d_vector ideal,
-                               d_vector actual
-                            ) const;
-
 private:
 
-    // ANN Private Vars
     unsigned int input_neurons_;
     unsigned int hidden_neurons_;
     unsigned int output_neurons_;
@@ -122,10 +108,10 @@ private:
     ///                -    Furthermore, within a layer, they go as: [H1W2],[H2W2],etc.
     thrust::device_vector<float> weights_;
 
-    /// The old (previous) Delta Updates `Δw(t-1)` respective to each weight
+    /// The old (previous) Delta Updates `Δw(t-1)` respective to each weight, same indexing scheme
     thrust::device_vector<float> updates_;
 
-    /// This index keeps track of where Weights begin and end (per layer increments)
+    /// Index tracks of where Weights begin and end (per layer increments) for fully connected network
     std::vector<std::pair<int,int>> w_index_;
 
 };

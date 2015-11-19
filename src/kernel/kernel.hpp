@@ -25,6 +25,7 @@ struct prg
 };
 
 /// Non-Zero predicate for thrust::count
+/// Use it to find in vectors the amount of non-zero values
 struct non_zero
 {
     __host__ __device__ bool operator()( const float & x )
@@ -32,7 +33,6 @@ struct non_zero
       return x != 0.0;
     }
 };
-
 
 /** 
  * Sigmoid Activation Kernel: σ(x) = 1 / (1 + e^{-x} ).
@@ -54,7 +54,7 @@ __global__ void sigmoid_prime (
                               );
 
 /** 
- * @brief Layer propagation: `O[j] * W[i]`
+ * @brief Forward Propagation: `O[j] * W[i]`
  * @param weight is the Weights Matrix, in Row-Major format, where a row corresponds to a node's weights
  * @param input is a Column Vector, corresponding to `O[j]` (the output from previous nodes)
  * @param output is a Row-Major matrix which stores the result
@@ -84,12 +84,12 @@ __global__ void sum_columns (
                             );
 
 /**
- * @brief Delta Error of last (output) layer (used for Gradient Descent)
- * @param sum is array `Sum ( Weight * Input)`
- * @param ideal is array `ideal` output
+ * @brief Delta Error of output layer: `-E * σ'( Σ(W[i]*O[j]) )`
+ * @param sum is array of previous layer output dot incoming weights: `Σ ( W[i] * O[j])`
+ * @param ideal is array `ideal` output, e.g., the Target output
  * @param actual is array `actual` output
- * @param delta is array of `-E * f'( S(W*I) )`
- * @param size is the amount of nodes (neurons) in output layer
+ * @param delta is array of δ[i] of output layer
+ * @param size is the amount of nodes in output layer
  * @note all parameters (w_sum,out_err,delta) should be the same size
  */
 __global__ void delta_output (
@@ -101,9 +101,9 @@ __global__ void delta_output (
                              );
 
 /** 
- * @brief Calculate `W[ik] * δ[k]`
- * @note We multiply each weight, with its respective δ[k]
- * @note `weights per node` must equal δ[k] - else it makes no sense
+ * @brief Calculate Delta dot product of weights and next layer node Deltas: `W[ik] * δ[k]`
+ * @note We multiply each weight, with its respective (next layer node's) δ[k]
+ * @note `weights per node` must equal δ[k]
  * @note Y grid is `weights per node` as well as δ[k] size (since they are equal)
  * @note X grid is layer i nodes (could differ from k nodes)
  */
@@ -152,7 +152,34 @@ __global__ void gradient_descent (
                                     float * g_ik,
                                     unsigned int size_d
                                  );
-                                    
+
+/**
+ * @brief Summarize Gradients for an entire Epoch 
+ * @param gradient will be updates (the storage array)
+ * @param new_value is the value to be added (the temp array)
+ */
+__global__ void sum_gradients (
+                                float * gradient,
+                                float * new_value
+                              );    
+
+/**
+ * @brief Back-Propagation for all weights: `Δw(t) = ε * ( ∂E / ∂W[i] ) + α * ( Δw(t-1) )`
+ * @param weights the entire network weights
+ * @param gradients all gradients `∂E / ∂W[ik]` same size as weights
+ * @param updates previous weight updates `Δw(t-1)` same size as weights, we set `Δw(t-1) = Δw(t)`
+ * @param alpha the gradient momentum
+ * @param epsilon the learning rate
+ * @note this is a linear 1D grid, where X iterates weights, gradiients and updates (all same size)
+ */
+__global__ void back_prop (
+                            float * weight,
+                            float * gradient,
+                            float * update,
+                            float alpha,
+                            float epsilon
+                         );
+
 /// Calculate the Output Error: (Ideal[i] - Actual[i])^2
 __global__ void squared_error ( 
                                 float * ideal,
