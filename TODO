@@ -1,5 +1,22 @@
-19.11.2015
+20.11.2015
 TODO:
-        1. (RE)VALIDATE the Network source-code, it seems to be getting stuck at specific MSE's
-        2. Create (de)serialisation for class ann: Saving and Loading (Using BOOST or CEREAL)
-        3. Optimise the code: only 35% on GPU is used, maybe I need to Multi-thread the training?
+
+        A. Weight initialisations: use the ai forum post and reply.
+
+        B. Using thread class functors (BOOST) I can run parallel pattern training runs (CPU & GPU)
+           This will also help clean up the Epoch function, by making it cleaner.
+           Each one will need to have a copy of the shared variables (gradients, errors)
+           The lifetime of those thread class functors should NOT be within the scope of the Epoch function
+           as my guess is that the (re)alloc within epoch causes a huge delay.
+           They should (both device allocations and thread objects) be allocated once during class training.
+           Always prefer to update values of an allocated array, than to allocate and copy!
+
+        C. Data is being copied when training. Skip this, use direct data iteration.
+        
+        D. Training data needs to be shuffled randomly between Epochs. Implement in Data class.
+
+        E. Weight initialisations: use the ai forum post and reply.
+
+        F. Create (de)serialisation for class ann: Saving and Loading (Using BOOST or CEREAL)
+
+        G. Bias neurons: This is complex, I have to change all kernel functions and methods, leave this for last.
