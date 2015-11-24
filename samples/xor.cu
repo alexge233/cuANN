@@ -12,7 +12,7 @@ int main (void)
     cuANN::data train_data = cuANN::data( "xor.data" );
 
     // Train on this data, MSE, Epochs
-    float mse = xor_net.train( train_data, 0.05f, 100000, 5000, false );
+    float mse = xor_net.train( train_data, 0.05f, 100000, 5000);
     std::cout << "Trained Network with MSE: " << mse << std::endl;
 
     std::cout << "Testing with [1,0] as input" << std::endl;

@@ -1,0 +1,12 @@
+#ifdef __CUDACC__
+#include <cuda.h>
+#endif
+
+#include <vector>
+#include <memory>
+#include <mutex>
+#include <utility>
+#include <thread>
+#include <condition_variable>
+#include <boost/asio.hpp>
+#include <thrust/device_vector.h>

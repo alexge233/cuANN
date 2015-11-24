@@ -110,131 +110,71 @@ __host__ ann::ann (
 
 __host__ float ann::train (
                               const cuANN::data & train_data,
-                              float mse_stop,
+                              const float mse_stop,
                               unsigned int epochs,
-                              unsigned int reports,
-                              bool online
+                              unsigned int reports
                           )
 {
-    // Load the training input data
-    thrust::host_vector<float> input_rows( train_data.size() * train_data.input_size() );
-
-    // Load the training output data
-    thrust::host_vector<float> output_rows( train_data.size() * train_data.output_size() );
-
-    // Make a copy of all data (because our train_data scheme uses tuples)
-    for ( int i = 0; i < train_data.size(); i++ )
+    // Weight gradients (Row-Major) - NOTE: those are Summed for each Pattern, during each Epoch 
+    thrust::device_vector<float> gradients( weights_.size() );
+    
+    // The old (previous) Delta Updates `Δw(t-1)`
+    thrust::device_vector<float> updates( weights_.size() );
+    
+    // Squared Errors (not Mean'ed yet)
+    thrust::device_vector<float> sq_errors( train_data.size()*train_data.output_size() );
+    
+    // Gradients (Sums) mutex - each thread will update by summing the Pattern's gradients
+    std::mutex gradient_mutex;
+   
+    // trainer data queue
+    std::vector< std::shared_ptr<trainer_data> > thread_data;
+    // Reserve same as MAX_THREADs else we will be doing many copies
+    thread_data.reserve(MAX_THREADS);
+    // Allocate thread_data objects - NOTE: Each `trainer_data` must be unique and not shared!
+    for (int i = 0; i < MAX_THREADS; i++)
     {
-        thrust::copy( train_data[i].input.begin(), 
-                      train_data[i].input.end(),
-                      input_rows.begin() + (i * train_data.input_size()) );
-
-        thrust::copy( train_data[i].output.begin(),
-                      train_data[i].output.end(),
-                      output_rows.begin() + (i * train_data.output_size()) );
+        thread_data.push_back( std::make_shared<trainer_data>( weights_, gradients, sq_errors, w_index_, gradient_mutex,
+                                                               output_neurons_, input_neurons_, hidden_neurons_, per_layer_ ));
     }
 
-    if ( input_rows.size() == output_rows.size() )
-        throw std::runtime_error("input rows not equal to output rows");
+    // trainer thread pool - MAX 4 CONCURRENT THREADS
+    cuANN::trainer_pool thread_pool(MAX_THREADS,thread_data);
 
+    cudaDeviceSynchronize();
     float mse = 0.0;
-
-    // Initialise and Resize the vector `updates_` same size as weights
-    updates_ = thrust::device_vector<float>( weights_.size() );
 
     // Iterate epochs and compare mse
     int k = 0;
     for ( int i = 0; i < epochs; i++ )
     {
-        mse = epoch( input_rows,
-                     train_data.input_size(),
-                     output_rows,
-                     train_data.output_size(),
-                     train_data.size(),
-                     online );
+        mse = epoch( train_data, thread_pool, gradients, updates, sq_errors );
         if ( k == reports && k != 0 )
         {
             std::cout << "Epoch "<< i << " MSE: " << mse  << std::endl;
             k = 0;
         }
         k++;
-        if ( mse < mse_stop )
-            break;
+        if ( mse < mse_stop ) break;
+
+        // TODO: We need to Shuffle the Training Data 
     }
     return mse;
 }
 
-__host__ ann::h_vector ann::propagate ( ann::d_vector input ) const
-{
-    if ( input.size() != input_neurons_ )
-        throw std::runtime_error( "ann::propagate param input size doesn't match input layer size" );
-
-    // Put the input through the activation function
-    thrust::device_vector<float> output = input;
-    float * output_ptr = thrust::raw_pointer_cast( output.data() );
-
-    auto dimA = dim1D(output.size());
-    sigmoid_activation<<<dimA.num_blocks_x,dimA.block_threads_x>>>( output_ptr );
-
-    // Propagate Input through every layer.
-    // If we have no hidden, then propagate through the weights from input to output layers
-    for ( int i = 0; i < w_index_.size(); i++)
-    {
-        unsigned int w_from = std::get<0>(w_index_[i]);
-        unsigned int w_to = std::get<1>(w_index_[i]);
-
-        // Update Out to equal the propagation of previous out.
-        auto sums = prop_layer( w_from, w_to, output );
-        
-        // Copy the sums as output
-        output = sums;
-
-        // Run the output through the activation function
-        auto dimB = dim1D(output.size());
-        sigmoid_activation<<<dimB.num_blocks_x,dimB.block_threads_x>>>( output_ptr );
-    }
-
-    return output;
-}
-
 __host__ float ann::epoch ( 
-                                h_vector & input,
-                                unsigned int input_len,
-                                h_vector & output,
-                                unsigned int output_len,
-                                unsigned int total,
-                                bool online
+                            const cuANN::data & dataset,
+                            cuANN::trainer_pool & thread_pool,
+                            thrust::device_vector<float> & gradients,
+                            thrust::device_vector<float> & updates,
+                            thrust::device_vector<float> & sq_errors
                           )
 {
     // Calculate Delta Nodes size
-    unsigned int delta_size = hidden_neurons_+output_neurons_;
-    // Layer Sums: Σ( O[j] * W[ij] )
-    thrust::device_vector<float> layer_sums(delta_size);
-    float * sums_ptr = thrust::raw_pointer_cast( layer_sums.data() );
-    // Delta (t) Values: δ[i] & δ[k]
-    thrust::device_vector<float> delta_vals(delta_size);
-    float * delta_ptr = thrust::raw_pointer_cast( delta_vals.data() );
-    // Primed Sums: F'( Σ( O[j] * W[ij] ) )
-    thrust::device_vector<float> primed_sums(delta_size);
-    float * primed_ptr = thrust::raw_pointer_cast( primed_sums.data() );
-    // Ideal (Target) Output
-    thrust::device_vector<float> ideal(output_neurons_);
-    float * ideal_ptr = thrust::raw_pointer_cast( ideal.data() );
-    // Store the Output (O[i]) for each Neuron/Node
-    thrust::device_vector<float> layer_outputs(input_neurons_+hidden_neurons_+output_neurons_);
-    // Batch Summed Gradients (Row-Major Matrix)
-    thrust::device_vector<float> gradients;
-    if ( !online ) gradients = thrust::device_vector<float>( weights_.size() );
-    // All Pattern Errors for all output nodes
-    thrust::device_vector<float> errors(total*output_neurons_);
-    // Wait for all allocations
-    cudaDeviceSynchronize();
+    //unsigned int delta_size = hidden_neurons_+output_neurons_;
+    thread_pool.start();
 
-    // AT THIS POINT, running Abelone seems very slow.
-    // Only 35% of GPU (GTX660) is occupied, and only 25% of CPU.
-    // I probably can Multi-thread the Loop Below, and Run Multiple Pattern Training Threads on the GPU.
-
-    // Iterate all training data once 
+    /*
     for ( int i = 0; i < total; i++ )
     {
         // Copy input from Host to Device as Output - We will modify contents & size
@@ -375,25 +315,64 @@ __host__ float ann::epoch (
 
     } // End of Epoch Loop
 
-    // if doing BATCH, do back-prop here
-    if ( !online )
-    {
-        float * grad_ptr = thrust::raw_pointer_cast( gradients.data() );                // Summed gradients from entire epoch
-        float * weight_ptr = thrust::raw_pointer_cast( weights_.data() );               // All weights
-        float * update_ptr = thrust::raw_pointer_cast( updates_.data() );               // All update values
-        auto dim_bp = dim1D( weights_.size() );
-        back_prop<<<dim_bp.num_blocks_x,dim_bp.block_threads_x>>>( weight_ptr, grad_ptr, update_ptr, alpha_, epsilon_ );   
-        cudaDeviceSynchronize();
-    }
+    // TODO: We will only be doing Batch training: 
+    // TODO: back_prop will be non-threaded, and will happen once all pattern threads have finished.
+    // TODO: We also need to calculate MSE after the loop
 
+    // Do back-prop here
+    float * grad_ptr = thrust::raw_pointer_cast( gradients.data() );                // Summed gradients from entire epoch
+    float * weight_ptr = thrust::raw_pointer_cast( weights_.data() );               // All weights
+    float * update_ptr = thrust::raw_pointer_cast( updates.data() );                // Previous update values
+    auto dim_bp = dim1D( weights_.size() );
+    back_prop<<<dim_bp.num_blocks_x,dim_bp.block_threads_x>>>( weight_ptr, grad_ptr, update_ptr, alpha_, epsilon_ );   
+    cudaDeviceSynchronize();
+
+    // Reduce Squared errors to MSE
     float sq_errors = thrust::reduce( errors.begin(), errors.end() );
     return (sq_errors / total);
+    */
+    thread_pool.wait();
+    thread_pool.stop();
+    return  0;
+}
+
+__host__ ann::h_vector ann::propagate ( thrust::device_vector<float> & input ) const
+{
+    if ( input.size() != input_neurons_ )
+        throw std::runtime_error( "ann::propagate param input size doesn't match input layer size" );
+
+    // Put the input through the activation function
+    thrust::device_vector<float> output = input;
+    float * output_ptr = thrust::raw_pointer_cast( output.data() );
+
+    auto dimA = dim1D(output.size());
+    sigmoid_activation<<<dimA.num_blocks_x,dimA.block_threads_x>>>( output_ptr );
+
+    // Propagate Input through every layer.
+    // If we have no hidden, then propagate through the weights from input to output layers
+    for ( int i = 0; i < w_index_.size(); i++)
+    {
+        unsigned int w_from = std::get<0>(w_index_[i]);
+        unsigned int w_to = std::get<1>(w_index_[i]);
+
+        // Update Out to equal the propagation of previous out.
+        auto sums = prop_layer( w_from, w_to, output );
+        
+        // Copy the sums as output
+        output = sums;
+
+        // Run the output through the activation function
+        auto dimB = dim1D(output.size());
+        sigmoid_activation<<<dimB.num_blocks_x,dimB.block_threads_x>>>( output_ptr );
+    }
+
+    return output;
 }
 
 __host__ ann::d_vector ann::prop_layer ( 
                                           unsigned int weights_begin,
                                           unsigned int weights_end,
-                                          const ann::d_vector & input
+                                          const thrust::device_vector<float> & input
                                        ) const
 {
     // TODO: ADD BIAS NEURON FOR EACH AND EVERY INPUT 
@@ -430,6 +409,5 @@ __host__ ann::d_vector ann::prop_layer (
 
     return sums;
 }
-
 
 };

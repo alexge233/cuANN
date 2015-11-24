@@ -35,9 +35,14 @@ set(BUILD_SHARED_LIBS ON)
 # packages
 find_package(CUDA 6.5 REQUIRED )
 find_package(Thrust 1.7.2 REQUIRED)
+find_package(Boost COMPONENTS system thread REQUIRED)
+find_package(Threads REQUIRED)
 
 # What does this line do ?
 set(CUDA_ATTACH_VS_BUILD_RULE_TO_CUDA_FILE ON)
+
+# ?
+set(CUDA_SEPERABLE_COMPILATION ON)
 
 # nvcc flags & C++ Flags - NOTE Optimisation can go here
 set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};#-gencode arch=compute_20,code=sm_20
@@ -46,8 +51,8 @@ set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};#-gencode arch=compute_20,code=sm_20
                                        -std=c++11;
                                        -DVERBOSE;
                                        #-DTHRUST_DEBUG;
-                                       -DNDEBUG;
-                                       -O3;
+                                       #-DNDEBUG;
+                                       #-O3;
                                        -Xcompiler -fPIC;
                                        --use_fast_math)
 
@@ -59,7 +64,13 @@ cuda_add_library(cuANN
                 ${SRC}/ann/ann.cu
                 ${SRC}/data/data.cu
                 ${SRC}/kernel/kernel.cu
+                ${SRC}/trainer/trainer.cu
+                ${SRC}/trainer/trainer_data.cu
+                ${SRC}/trainer/trainer_pool.cu
                 )
+
+# Link with Boost and pthreads - This must be TESTED
+target_link_libraries(cuANN ${Boost_SYSTEM_LIBRARY} ${Boost_THREAD_LIBRARY} ${CMAKE_THREAD_LIBS_INIT})
 
 # Then we may build the samples
 

@@ -142,7 +142,7 @@ __global__ void delta_hidden (
  * @note This is a per-layer calculation, not a network global function (not for the entire network) 
  * @param d_k is `δ[k]` the following layer's Node Delta
  * @param i_i is `O[i]` the output of the activation function from preceeding layer
- * @param g_ik is the product `∂E / ∂W[ik]` e.g., the gradient (function output)
+ * @param g_ik is the product `∂E/∂W[ik]` e.g., the gradient (function output)
  * @param size_d defines the row width of the produced matrix
  * @note X grid is Node Delta count, Y grid is O[i] count 
  */

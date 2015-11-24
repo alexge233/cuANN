@@ -16,3 +16,6 @@
 #include "data/data.hpp"
 #include "dim_find/dim_find.hpp"
 #include "kernel/kernel.hpp"
+#include "trainer/trainer.hpp"
+#include "trainer/trainer_data.hpp"
+#include "trainer/trainer_pool.hpp"

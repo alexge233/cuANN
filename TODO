@@ -1,22 +1,25 @@
 20.11.2015
 TODO:
+        A. Weight initialisations: +-sqrt(6)/sqrt(n) where n is number of nodes in previous layer + nodes in next layer
+           https://groups.google.com/forum/#!msg/comp.ai.neural-nets/vzWsObAi00I/cmf6o-RXBAAJ
 
-        A. Weight initialisations: use the ai forum post and reply.
+        B. Fix, update, migrate and finish Multi-threaded Epochs 
+           @see Projects/TESTS/boost_thread_reuse/
 
-        B. Using thread class functors (BOOST) I can run parallel pattern training runs (CPU & GPU)
-           This will also help clean up the Epoch function, by making it cleaner.
-           Each one will need to have a copy of the shared variables (gradients, errors)
-           The lifetime of those thread class functors should NOT be within the scope of the Epoch function
-           as my guess is that the (re)alloc within epoch causes a huge delay.
-           They should (both device allocations and thread objects) be allocated once during class training.
-           Always prefer to update values of an allocated array, than to allocate and copy!
-
-        C. Data is being copied when training. Skip this, use direct data iteration.
+        C. Fix sigmoid as __device__ function
+           Add a constant skew parameter (e.g., sigmoid(x) - 0.f)
         
-        D. Training data needs to be shuffled randomly between Epochs. Implement in Data class.
+        D. Training data needs to be shuffled randomly between Epochs. 
+           Implement in Data class. VERY IMPORTANT!!!
 
-        E. Weight initialisations: use the ai forum post and reply.
+        E. Examine templating any kind of activation function, so that we can swap activation methods easily.
+           see the ai.comp.forum reply, user Ray mentions implementations.
+           Implement TANH function: CUDA __tanhf()
+                     SOFTSIGN function: https://brainlogging.files.wordpress.com/2011/03/these.pdf
+                     RAMP function: ???
 
-        F. Create (de)serialisation for class ann: Saving and Loading (Using BOOST or CEREAL)
+        F. Bias neurons: This is complex, I have to change all kernel functions and methods, leave this for last.
 
-        G. Bias neurons: This is complex, I have to change all kernel functions and methods, leave this for last.
+        G. Create (de)serialisation for class ann: 
+           Saving and Loading (Using BOOST) of a Trained network.
+

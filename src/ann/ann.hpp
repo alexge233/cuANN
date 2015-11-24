@@ -3,15 +3,17 @@
 #include "includes.ihh"
 namespace cuANN
 {
-/**
- * @class ann
- * @brief A simple Feedforward artificial neural network
- * @date 6th October 2015
- * @author Alex Giokas <alexge233@hotmail.com>
- * @version 1
- *
- * TODO: ann must be (de)serialisable
- */
+#define MAX_THREADS 4
+///
+/// @class ann
+/// @brief A simple Feedforward artificial neural network
+/// @date November 2015
+/// @author Alexander Giokas <a.gkiokas@warwick.ac.uk>
+/// @version 2
+///
+/// TODO: ann must be (de)serialisable
+/// TODO: I would like to template the activation function for the ann class.
+///
 class ann
 {
 public:
@@ -42,25 +44,28 @@ public:
      */
     float train (
                   const cuANN::data & train_data,
-                  float mse_stop,
+                  const float mse_stop,
                   unsigned int epochs,
-                  unsigned int reports,
-                  bool online
+                  unsigned int reports
                 );
     
     /**
      * @brief Propagate the input through the network, and get an output
-     * @return a vector of output the size of ann.output_neurons
+     * @return The Output array `O[k]` from the Output layer and nodes.
      */
-    h_vector propagate ( d_vector input ) const;
+    h_vector propagate ( thrust::device_vector<float> & input ) const;
 
 protected:
 
     /**
      * @brief This is a Training Epoch
-     * @param input is a continous memory of many input vectors separated at interval `input_len`.
-     * @param output is also a continous memory of many output vectors, separated at interval `output_len`
-     * @param online defines Online Learning (if set to false, it is Batch Learning)
+     * @param dataset is the training data set used to train the network.
+     * @param thread_pool is the trainer worker pool of parallel threads.
+     * @param thread_data is a vector of totally allocated thread data objects.
+     * @param gradients is the array of `∂E/∂W[ik]`
+     * @param updates is the array of `Δw(t-1)`
+     * @param errors is the array of squared errors  
+     *
      * @return MSE: Mean-Square Error
      * 
      * Calculate the Delta Rule: `σ'( Σ[ji] ) * Σ( W[ik] * δ[k] )`
@@ -69,12 +74,11 @@ protected:
      * Finally, use Back-Propagation (Either Online or Batch)
      */
     float epoch ( 
-                    h_vector & input,
-                    unsigned int input_len,
-                    h_vector & output,
-                    unsigned int output_len,
-                    unsigned int total,
-                    bool online
+                    const cuANN::data & dataset,
+                    cuANN::trainer_pool & thread_pool,
+                    thrust::device_vector<float> & gradients,
+                    thrust::device_vector<float> & updates,
+                    thrust::device_vector<float> & errors
                 );
 
     /// @brief Propagate input via single layer: `O[j] * W[i]`
@@ -86,7 +90,7 @@ protected:
     d_vector prop_layer (
                           unsigned int weights_begin,
                           unsigned int weights_end,
-                          const d_vector & input
+                          const thrust::device_vector<float> & input
                         ) const;
 
 private:
@@ -96,24 +100,20 @@ private:
     unsigned int output_neurons_;
     unsigned int hidden_layers_;
     unsigned int per_layer_;
-
     float alpha_;
     float epsilon_;
 
-    /// WARNING: This is a vectorised Matrix!
-    ///                - This vector will contain ALL weights
-    ///                - in blocks of `layers_`, e.g.: 
-    ///                -    first hidden vector weights will be from [0]-[per_layer_]_,
-    ///                -    second hidden vector weights will be from [per_layer_] - [2 * per_layer_]
-    ///                -    Furthermore, within a layer, they go as: [H1W2],[H2W2],etc.
+    /// @note This is a vectorised Matrix!
+    /// @note This vector contains all weights.
+    ///       They are separated in blocks of `layers_`, e.g.: 
+    ///         - First hidden vector weights will be from [0]-[input*per_layer_]_,
+    ///         - Second hidden vector weights will be from [per_layer_] - [2*per_layer_]
+    ///       They are further partitions as [Node(x),Weight(x1,x2,...xN) within a layer
+    /// @see w_index_ which indexes the weight range per layer.
     thrust::device_vector<float> weights_;
-
-    /// The old (previous) Delta Updates `Δw(t-1)` respective to each weight, same indexing scheme
-    thrust::device_vector<float> updates_;
 
     /// Index tracks of where Weights begin and end (per layer increments) for fully connected network
     std::vector<std::pair<int,int>> w_index_;
-
 };
 }
 #endif
