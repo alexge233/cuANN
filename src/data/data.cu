@@ -114,4 +114,22 @@ const row & data::operator[] (const int idx ) const
   return rows_[idx];
 }
 
+void data::shuffle()
+{
+    auto prng = std::default_random_engine{};
+    prng.seed( std::random_device{}() );
+    std::shuffle( std::begin(rows_), std::end(rows_), prng);
+}
+
+void data::print() const
+{
+    for ( const auto & pair : rows_ )
+    {
+        thrust::copy( pair.input.begin(), pair.input.end(), std::ostream_iterator<float>(std::cout, " "));
+        std::cout << std::endl;
+        thrust::copy( pair.output.begin(), pair.output.end(), std::ostream_iterator<float>(std::cout, " "));
+        std::cout << std::endl;
+    }
+}
+
 }

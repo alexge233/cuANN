@@ -3,5 +3,6 @@
 #include <iterator>
 #include <fstream>
 #include <algorithm>
+#include <random>
 
 #include <thrust/host_vector.h>

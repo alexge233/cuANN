@@ -73,10 +73,12 @@ __host__ ann::ann (
         weights_ = thrust::device_vector<float>( input_neurons_ * output_neurons );
         w_index_.push_back( std::make_pair( 0, weights_.size() ) );
     }
-   
-    // low and upper random bounds
-    float upper = .1f;
-    float lower = -.1f;
+
+    // See how to calculate initial weight values: 
+    // http://stats.stackexchange.com/questions/47590/what-are-good-initial-weights-in-a-neural-network
+    // `( -1/√d, 1/√d )` where d is the number of input nodes.
+    float upper = 1.0 / std::sqrt( input_neurons_ );
+    float lower = -1.0 / std::sqrt( input_neurons_ );
 
     thrust::counting_iterator<float> index_sequence_begin(0);
     auto now = std::chrono::system_clock::now();
@@ -87,29 +89,21 @@ __host__ ann::ann (
                         index_sequence_begin + weights_.size(),
                         weights_.begin(),
                         prg( upper, lower, seed ) );
-    // momentum
-    alpha_ = 0.3;
-    // learning rate
-    epsilon_ = 0.7;
+    // momentum( 0.1,0.25, 0.3, 0.9 )
+    alpha_ = 0.1;
+
+    // learning rate ( 0.7, 0.5, .02)
+    epsilon_ = 1.0;
 
     std::cout << "input neurons: " << input_neurons << std::endl;
     std::cout << "hidden neurons: " << hidden_neurons_ << " (per layer: " << per_layer_ << ")" << std::endl;
     std::cout << "output neurons: " << output_neurons << std::endl;
     std::cout << "weights: " << weights_.size() << std::endl;
     std::cout << "learning rate: " << epsilon_ << " and momentum: " << alpha_ << std::endl;
-
-//    for ( int k = 0; k < w_index_.size(); k++)
-//    {
-//        auto from = std::get<0>(w_index_[k]);
-//        auto to   = std::get<1>(w_index_[k]);
-//        for ( int x = from; x < to; x++ )
-//            std::cout << weights_[x] << " ";
-//        std::cout << std::endl;
-//    }
 }
 
 __host__ float ann::train (
-                              const cuANN::data & train_data,
+                              cuANN::data & train_data,
                               float mse_stop,
                               unsigned int epochs,
                               unsigned int reports,
@@ -118,21 +112,27 @@ __host__ float ann::train (
 {
     // Load the training input data
     thrust::host_vector<float> input_rows( train_data.size() * train_data.input_size() );
-
     // Load the training output data
     thrust::host_vector<float> output_rows( train_data.size() * train_data.output_size() );
 
-    // Make a copy of all data (because our train_data scheme uses tuples)
-    for ( int i = 0; i < train_data.size(); i++ )
+    // This is overkill - I am shuffling and copying too often, will be fixed in next version
+    std::function<void( cuANN::data &)> shuffler =
+    [&]( cuANN::data & rhs )
     {
-        thrust::copy( train_data[i].input.begin(), 
-                      train_data[i].input.end(),
-                      input_rows.begin() + (i * train_data.input_size()) );
+        // Shuffle
+        rhs.shuffle();
+        // Copy
+        for ( int i = 0; i < train_data.size(); i++ )
+        {
+            thrust::copy( train_data[i].input.begin(), 
+                          train_data[i].input.end(),
+                          input_rows.begin() + (i * train_data.input_size()) );
 
-        thrust::copy( train_data[i].output.begin(),
-                      train_data[i].output.end(),
-                      output_rows.begin() + (i * train_data.output_size()) );
-    }
+            thrust::copy( train_data[i].output.begin(),
+                          train_data[i].output.end(),
+                          output_rows.begin() + (i * train_data.output_size()) );
+        }
+    };
 
     if ( input_rows.size() == output_rows.size() )
         throw std::runtime_error("input rows not equal to output rows");
@@ -141,6 +141,9 @@ __host__ float ann::train (
 
     // Initialise and Resize the vector `updates_` same size as weights
     updates_ = thrust::device_vector<float>( weights_.size() );
+
+    // shuffle + copy
+    shuffler(train_data);
 
     // Iterate epochs and compare mse
     int k = 0;
@@ -156,7 +159,10 @@ __host__ float ann::train (
         {
             std::cout << "Epoch "<< i << " MSE: " << mse  << std::endl;
             k = 0;
+            // shuffle + copy
+            shuffler(train_data);
         }
+        // Randomly shuffle the training data ?
         k++;
         if ( mse < mse_stop )
             break;

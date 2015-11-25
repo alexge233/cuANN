@@ -17,7 +17,8 @@ struct prg
     __host__ __device__ float operator()( int idx ) const
     {
         thrust::default_random_engine rng ( seed );
-        //thrust::minstd_rand rng;
+        // Normal distribution: mean 2.0 and standard deviation 3.5
+        //thrust::random::normal_distribution<float> dist(2.0f,3.5f)
         thrust::uniform_real_distribution<float> dist(min, max);
         rng.discard(idx);
         return dist(rng);
@@ -33,6 +34,13 @@ struct non_zero
       return x != 0.0;
     }
 };
+
+
+/**
+ * @brief Sigmoid Activation function: `σ(x) = 1 / (1 + e^{-x} )`
+ */
+__device__ float sigmoid_function( float input );
+
 
 /** 
  * Sigmoid Activation Kernel: σ(x) = 1 / (1 + e^{-x} ).

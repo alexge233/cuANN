@@ -41,7 +41,7 @@ public:
      * @param online defines online training if TRUE, or batch training if FALSE
      */
     float train (
-                  const cuANN::data & train_data,
+                  cuANN::data & train_data,
                   float mse_stop,
                   unsigned int epochs,
                   unsigned int reports,
