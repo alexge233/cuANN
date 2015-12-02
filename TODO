@@ -1,25 +1,15 @@
-20.11.2015
+25.11.2015
 TODO:
-        A. Weight initialisations: +-sqrt(6)/sqrt(n) where n is number of nodes in previous layer + nodes in next layer
-           https://groups.google.com/forum/#!msg/comp.ai.neural-nets/vzWsObAi00I/cmf6o-RXBAAJ
-
-        B. Fix, update, migrate and finish Multi-threaded Epochs 
+        A. Fix, update, migrate and finish Multi-threaded Epochs 
            @see Projects/TESTS/boost_thread_reuse/
 
-        C. Fix sigmoid as __device__ function
-           Add a constant skew parameter (e.g., sigmoid(x) - 0.f)
-        
-        D. Training data needs to be shuffled randomly between Epochs. 
-           Implement in Data class. VERY IMPORTANT!!!
+        B. Due to the templating of activation functions & derivatives
+           we can now do `train` with template params: Activation Func, Activation Derivative Func.
+           Same for propagate.
+           Ideally, maybe they should be used either at construction time, or we could (not should)
+           template the entire class?
 
-        E. Examine templating any kind of activation function, so that we can swap activation methods easily.
-           see the ai.comp.forum reply, user Ray mentions implementations.
-           Implement TANH function: CUDA __tanhf()
-                     SOFTSIGN function: https://brainlogging.files.wordpress.com/2011/03/these.pdf
-                     RAMP function: ???
-
-        F. Bias neurons: This is complex, I have to change all kernel functions and methods, leave this for last.
-
-        G. Create (de)serialisation for class ann: 
+        C. Create (de)serialisation for class ann: 
            Saving and Loading (Using BOOST) of a Trained network.
 
+        D. Bias neurons: Although not nessesary, it would be nice to have them if needed?

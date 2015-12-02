@@ -1,79 +1,110 @@
 #include "kernel.hpp"
-
 namespace cuANN
 {
+/*
+/// Signum function: returns ±1 or 0
+__device__ float signum(const float x)
+{
+    return (0.f < x) - (x < 0.f);
+}
 
-__device__ __constant__ float Euler = 2.71828182845904523536;
+/// Hyperbolic Tangent: `tanh(x) = e^(x) - e^(-x) / e^(x) + e^(-x)i`
+__device__ float tanh(const float x)
+{
+    float exp2x = __expf(2.f*x);
+    return __fdividef((exp2x-1.f),__fadd_rz(exp2x,1.f));
+}
 
+/// Sigmoid: `σ(x) = 1 / 1 + e^( -x )`
+__device__ float sigmoid(const float x)
+{
+    float exp_val = __expf(-x);
+    float denom = __fadd_rz(1.f,exp_val);
+    return __fdividef(1.f,denom);
+}
+
+/// Sigmoid Bipolar: `σ(x) = -1 + 2 / (1 + e^-x)`
+__device__ float sigmoid_bipolar(const float x)
+{
+    float nom = __fadd_rz(-1.f,2.f);
+    float denom = __fadd_rz(1.f,__expf(-x));
+    return __fdividef(nom,denom);
+}
+
+/// Hyperbolic Tangent: `tanh(x) = e^(x) - e^(-x) / e^(x) + e^(-x)i`
+/// Tanh Scaled: `1.7159 * tanh(2.f/3.f*x)`
+/// @note: The function is scaled in range {-1,1} to avoid learning saturation
+__device__ float tanh_scaled(const float x)
+{
+    return 1.7159f * logistic::tanh(2.f/3.f*x);
+}
+
+/// Softsign: `σ(x) = x / 1 + abs( x )`
+__device__ float soft_sign(const float x)
+{
+    float denom = __fadd_rz(1.f,fabsf(x));
+    return __fdividef(x,denom);
+}
+
+/// Sigmoid: `σ'(x) = σ(x) * (1 - σ(x) )`
+__device__ float sigmoid_deriv(const float x)
+{
+    float sigma = sigmoid(x);
+    float denom = 1.f - sigma;
+    return __fmul_rz(sigma,denom);
+}
+
+/// Sigmoid Bipolar: `σ(x) = 0.5 * (1 + σ(x)) * (1 – σ(x) )`
+__device__ float sigmoid_bipolar_deriv(const float x)
+{
+    float sigma = sigmoid(x);
+    float lhs = __fmul_rz(0.5f,__fadd_rz(1.f,sigma));
+    float rhs = 1.f - sigma;
+    return __fmul_rz(lhs,rhs);
+}
+
+/// Tanh: `σ'(x) = 1.14393 * (1- tanh^2 ( 2/3 * x))`
+__device__ float tanh_scaled_deriv(const float x)
+{
+    float scaled_x = __fmul_rz(__fdividef( 2.f, 3.f),x);
+    float tanh_val = logistic::tanh(scaled_x);
+    float tanh_sq = __fmul_rz(tanh_val,tanh_val);
+    float rhs = 1.f - tanh_sq;
+    return __fmul_rz(1.14393f,rhs);
+}
+
+/// Softsign: `σ(x) = sgn(x) / (1 + |x| )^2` where sgn is the signum
+__device__ float soft_sign_deriv(const float x)
+{
+    float rhs = __fadd_rz(1.f,fabsf(x));
+    float rhs_sq = __fmul_rz(rhs,rhs);
+    return __fdividef(signum(x),rhs_sq);
+}
+*/
+
+/*
 __global__ void sigmoid_activation( float * input )
 {
     // Iterate Input vector
     int x = blockIdx.x * blockDim.x + threadIdx.x;
-
-    float _x_ = input[x];
-
-    // -X: Neg X
-    float x_neg = __fmul_rz( -1.f, _x_ );
-
-    // Y: Euler Pow To X Negative
-    float e_to_x_neg = __powf( Euler, x_neg );
-
-    // 1 + Euler^( -X )
-    float denom = __fadd_rz( 1.f, e_to_x_neg );
-
     // 1 / 1 + Euler^( -X )
-    input[x]  = __fdividef( 1.f, denom );
-
-//    printf("x: %.9g, -x: %.9g, E^(-x): %.9g, 1+E^(-x): %.9g, σ(x): %.9g\n",
-//            _x_,x_neg,e_to_x_neg,denom,input[x]);
+    input[x]  = logistic::sigmoid(input[x]); 
 }
-
-__global__ void sigmoid_prime  (
-                                  float * sum_ji,
-                                  float * output
-                               )
-{
-    // Iterate Vector `Σ[ji]`
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-
-    // -X: Neg X
-    float x_neg = __fmul_rz( -1.f, sum_ji[x] );
-
-    // Y: Euler Pow To X Negative
-    float e_to_x_neg = __powf( Euler, x_neg );
-
-    // 1 + Euler^( -X )
-    float denom = __fadd_rz( 1.f, e_to_x_neg );
-
-    // 1 / 1 + Euler^( -X )
-    float sig_x  = __fdividef( 1.f, denom );
-
-    // Sigmoid Prime: σ(x) * (1 - σ(x))
-    output[x] = __fmul_rz( sig_x, (1.f - sig_x) );
-
-//    printf("x: %.9g, -x: %.9g, E^(-x): %.9g, 1+E^(-x): %.9g, σ(x): %.9g, σ'(x): %.9g\n",
-//            sum_ji[x],x_neg,e_to_x_neg,denom,sig_x,output[x]);
-
-}
+*/
 
 __global__ void forward_prop ( 
-                               const float * weight, 
-                               const float * input, 
-                               float * output, 
-                               unsigned int w_size
+                               const float * weight, // W[ji] 
+                               const float * input,  // O[j]
+                               float * output,       // I[i]
+                               unsigned int w_size   // weights per node (# of columns)
                              )
 {
     // X is input size (w_size)
     int x = blockIdx.x * blockDim.x + threadIdx.x; 
-
     // Y is weights per neuron/node (i_size)
     int y = blockIdx.y * blockDim.y + threadIdx.y;   
-
     //  I[j] * W[i] - Row-Major Matrix
     output[w_size*x+y] = __fmul_rz(input[x], weight[w_size * x + y]);
-    
-//    printf("X: %d, Y: %d, I: %.9g, W: %.9g, O: %.9g\n", 
-//            x, y, input[x], weight[w_size * x + y], output[w_size * x + y] );
 }
 
 __global__ void sum_columns ( 
@@ -85,50 +116,12 @@ __global__ void sum_columns (
 {
     // X thread iterates Columns and sums their Row values
     int x = blockIdx.x * blockDim.x + threadIdx.x; 
-   
-   float total;
+    float total;
     for ( int y = 0; y < height; y++ )
     {
-//        printf("X: %d, O[j]*W[i]: %.9g\n",x,w_mtx[y*width+x]);
         total = __fadd_rz( total, w_mtx[y*width+x]);
     }
     output[x] = total;
-}
-
-__global__ void delta_output (
-                                float * sum,
-                                float * ideal,
-                                float * actual,
-                                float * delta,
-                                unsigned int index
-                             )
-{
-    // x is the output neuron/node count (e.g., length of actual & ideal)
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-
-    // Calculate the Negative Error: -(Actual - Ideal)
-    float neg_error = __fmul_rz( -1.f, ( actual[x] - ideal[x]) );
-
-    // -X: Neg X
-    float x_neg = __fmul_rz( -1.f, sum[x+index] );
-
-    // Y: Euler Pow To X Negative
-    float e_to_x_neg = __powf( Euler, x_neg );
-
-    // 1 + Euler^( -X )
-    float denom = __fadd_rz( 1.f, e_to_x_neg );
-
-    // 1 / 1 + Euler^( -X )
-    float sig_x  = __fdividef( 1.f, denom );
-
-    // Sigmoid Prime: σ(x) * (1 - σ(x))
-    float primed = __fmul_rz( sig_x, (1.f - sig_x) );
-
-    // -E * σ'(Σ(O[i])
-    delta[x+index] = __fmul_rz( neg_error, primed );
-
-//    printf( "Ideal: %.9g, Actual: %.9g, Out: %.9g, -Error: %.9g, F'(Out): %.9g, Delta: %.9g\n",
-//             ideal[x], actual[x], sum[x+index],neg_error,primed,delta[x+index]);
 }
 
 __global__ void delta_product (
@@ -140,35 +133,27 @@ __global__ void delta_product (
 {
     // X is layer[i] nodes (size_i)
     int x = blockIdx.x * blockDim.x + threadIdx.x;
-
     // Y is layer[k] nodes (size_k) == d_k == w_per_n
     int y = blockIdx.y * blockDim.y + threadIdx.y;
-
     //  W[ik] * δ[k] - Row-Major Matrix
     output[width*x+y] = __fmul_rz( d_k[y], w_ik[width*x+y]);
-    
-//    printf("X:%d,Y:%d, δ[k]: %.9g, w[ik]: %.9g, dot: %.9g\n", 
-//            x, y, d_k[y], w_ik[width*x+y], output[width*x+y]);
 }
 
 __global__ void delta_sum_rows (
-                                 float * w_ik_d,
-                                 float * delta_i,
-                                 unsigned int width
+                                float * w_ik_d,
+                                float * delta_i,
+                                unsigned int width
                                )
 {
     // X thread iterates Rows and Sums the respective Column values
     int x = blockIdx.x * blockDim.x + threadIdx.x; 
-   
     float total = 0.f;
     for ( int y = 0; y < width; y++ )
     {
         //printf("X:%d, Σ: %.9f + %.9f\n",x,total,w_ik_d[x*width+y]);
         total = __fadd_rz( total, w_ik_d[x*width+y]);
     }
-
     delta_i[x] = total;
-//    printf("X:%d, δ[i]: %.9g\n",x,delta_i[x]);
 }
 
 __global__ void delta_hidden (
@@ -178,16 +163,11 @@ __global__ void delta_hidden (
 {
     // X grid is size_i
     int x = blockIdx.x * blockDim.x + threadIdx.x;
-
     // δ[i] = f'( Σ[ji]) * Σ(w[ik] * δ[k])
     // NOTE: delta_i ALREADY contains `Σ(w[ik] * δ[k])`
     float rhs = delta_i[x];
-
     // δ[i] = σ'( Σ[ji]) * Σ(w[ik] * δ[k])
     delta_i[x] = __fmul_rz( prime_ji[x], rhs );
-
-//    printf("X %d, F'(Σ[ji]): %.9g, Σ(w[ik]*δ[k]): %.9g, δ[i]: %.9g\n",
-//            x, prime_ji[x], rhs, delta_i[x]);
 }
 
 __global__ void gradient_descent (
@@ -199,25 +179,19 @@ __global__ void gradient_descent (
 {
     // X = Node Delta Count (layer k)
     int x = blockIdx.x * blockDim.x + threadIdx.x;
-
     // Y = Node Output Count (layer i)
     int y = blockIdx.y * blockDim.y + threadIdx.y;
-
     // Row-Major Matrix
     g_ik[size_d*x+y] = __fmul_rz( d_k[x], o_i[y]);
-
-//    printf("X: %d, Y: %d, δ[k]: %.9g, O[i]: %.9g, dot: %.9g\n", 
-//            x, y, d_k[x], o_i[y], (d_k[x]*o_i[y]) );
 }
 
 __global__ void sum_gradients (
                                 float * gradient,
                                 float * new_value
-                              )
+                              ) 
 {
     // X Grid iterates all gradient values 
     int x = blockIdx.x * blockDim.x + threadIdx.x;
-
     // A Simple summation
     gradient[x] = __fadd_rz( gradient[x], new_value[x] );
 }
@@ -232,24 +206,16 @@ __global__ void back_prop (
 {
     // X Grid iterates weight, gradient and update (all same size)    
     int x = blockIdx.x * blockDim.x + threadIdx.x;
-
     // ε * ( ∂E / ∂W[ik] )
     float lhs = __fmul_rz( epsilon, gradient[x] ); 
-
     // α * ( Δw(t-1) )
     float rhs = __fmul_rz( alpha, update[x] );
-
     // Δw(t) = ε * ( ∂E / ∂W[i] ) + α * ( Δw(t-1) )
     float d_w = __fadd_rz( lhs, rhs );
-
     // Update weight: W[i] = W[i] + Δw(t)
     weight[x] = __fadd_rz( weight[x], d_w );
-
     // Set `Δw(t-1) = Δw(t)`
     update[x] = d_w;
-
-//    printf("X: %d, Δw(t): %.9g, ε: %.9g, ∂E/∂W[i] %.9g, α: %.9g, Δw(t-1): %.9g, W[i]: %.9g\n", 
-//            x, d_w, epsilon, gradient[x], alpha, update[x], weight[x] );
 }
 
 __global__ void squared_error ( 
@@ -261,8 +227,6 @@ __global__ void squared_error (
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     float diff = ideal[x] - actual[x];
     errors[x] = __fmul_rz( diff, diff );
-    //printf("X:%d,Ideal: %.9g, Actual: %.9g, Diff: %.9g, Error: %.9g\n",
-    //        x,ideal[x],actual[x],diff,errors[x]);
 }
 
 };

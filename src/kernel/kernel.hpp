@@ -4,54 +4,158 @@
 namespace cuANN
 {
 
-/// Pseudo-Random Number Generator
-struct prg
+/// Sigmoid: `σ(x) = 1 / 1 + e^( -x )`
+struct sigmoid
 {
-    float min, max;
-    unsigned int seed; 
-
-    __host__ __device__ prg( float _a, float _b, unsigned int _s ) 
-    : min(_a), max(_b), seed( _s )
-    {};
-
-    __host__ __device__ float operator()( int idx ) const
+    sigmoid()=default;
+    __device__ float operator()(const float x) const
     {
-        thrust::default_random_engine rng ( seed );
-        //thrust::minstd_rand rng;
-        thrust::uniform_real_distribution<float> dist(min, max);
-        rng.discard(idx);
-        return dist(rng);
+        float exp_val = __expf(-x);
+        float denom = __fadd_rz(1.f,exp_val);
+        return __fdividef(1.f,denom);
     }
 };
 
-/// Non-Zero predicate for thrust::count
-/// Use it to find in vectors the amount of non-zero values
-struct non_zero
+/// Sigmoid Derivative: `σ'(x) = σ(x) * (1 - σ(x) )`
+struct sigmoid_deriv
 {
-    __host__ __device__ bool operator()( const float & x )
+    sigmoid_deriv()=default;
+    __device__ float operator()(const float x) const
     {
-      return x != 0.0;
+        float exp_val = __expf(-x);
+        float denom = __fadd_rz(1.f,exp_val);
+        float _sig= __fdividef(1.f,denom);
+        return __fmul_rz(_sig,(1.f-_sig));
     }
 };
+
+/// Sigmoid Bipolar: `σ(x) = -1 + 2 / (1 + e^-x)`
+struct sigmoid_bipolar
+{
+    __device__ float operator()(const float x) const
+    {
+        float nom = __fadd_rz(-1.f,2.f);
+        float denom = __fadd_rz(1.f,__expf(-x));
+        return __fdividef(nom,denom);
+    }
+};
+
+/// Sigmoid Bipolar Derivative: `σ(x) = 0.5 * (1 + σ(x)) * (1 – σ(x) )`
+struct sigmoid_bipolar_deriv
+{
+    sigmoid_bipolar_deriv()=default;
+    __device__ float operator()(const float x) const
+    {
+        float nom = __fadd_rz(-1.f,2.f);
+        float denom = __fadd_rz(1.f,__expf(-x));
+        float _sig= __fdividef(nom,denom);
+        float rhs = 1.f-_sig;
+        float lhs = __fadd_rz(1.f,_sig);
+        float inner= __fmul_rz(lhs,rhs);
+        return __fmul_rz(0.5f,inner);
+    }
+};
+
+/// Hyperbolic Tangent: `tanh(x) = e^(x) - e^(-x) / e^(x) + e^(-x)i`
+/// Tanh Scaled: `1.7159 * tanh(2.f/3.f*x)`
+/// @note: The function is scaled in range {-1,1} to avoid learning saturation
+struct tanh_scaled
+{
+    tanh_scaled()=default;
+    __device__ float operator()(const float x) const
+    {
+        float value = __fmul_rz(__fdividef(2.f,3.f),x);
+        float exp2x = __expf(2.f*value);
+        float tn_val= __fdividef((exp2x-1.f),__fadd_rz(exp2x,1.f));
+        return __fmul_rz(1.7159f,tn_val);
+    }
+};
+
+/// Tanh: `σ'(x) = 1.14393 * (1- tanh^2 ( 2/3 * x))`
+struct tanh_scaled_deriv
+{
+    tanh_scaled_deriv()=default;
+    __device__ float operator()(const float x) const
+    {
+        // TODO
+    }
+};
+
+/// Softsign: `σ(x) = x / 1 + abs( x )`
+struct soft_sign
+{
+    __device__ float operator()(const float x) const
+    {
+        float denom = __fadd_rz(1.f,fabsf(x));
+        return __fdividef(x,denom);
+    }
+};
+
+/// Softsign: `σ(x) = sgn(x) / (1 + |x| )^2` where sgn is the signum
+struct soft_sign_deriv
+{
+    soft_sign_deriv()=default;
+    __device__ float operator()(const float x) const
+    {
+        // TODO
+    }
+};
+
 
 /** 
- * Sigmoid Activation Kernel: σ(x) = 1 / (1 + e^{-x} ).
+ * @brief Activation Kernel 
+ * @param func is the activation function, same as template typename F
  * @param input is an input device array,
- * @param size defines the size of the input array
  * @note this is a 1D grid kernel
  */
-__global__ void sigmoid_activation ( float * input );
+template <typename F>
+__global__ void activate(F const& func, float * input)
+{
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    input[x]  = func(input[x]);
+}
+
+/// TODO: Add documentation, this is ex-`sigmoid_prime`
+template <typename F>
+__global__ void derivatives(F const& func, float * sum_ji, float * output)
+{
+    // Iterate Vector `Σ[ji]`
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    output[x] = func(sum_ji[x]);
+}
 
 /**
- * @brief Calculate the Sigmoid Prime of: σ'(Σ[ji]) = σ(x) * (1 - σ(x))
- * @param sum_ji is the Σ[ji]
- * @param output store the result
- * @note this is a 1D grid kernel
+ * @brief Delta Error of output layer: `-E * σ'( Σ(W[i]*O[j]) )`
+ * @param deriv is the activation function derivative
+ * @param sum is array of previous layer output dot incoming weights: `Σ ( W[i] * O[j])`
+ * @param ideal is array `ideal` output, e.g., the Target output
+ * @param actual is array `actual` output
+ * @param delta is array of δ[i] of output layer
+ * @param index is (???) @see ann/ann.cu
+ * @note all parameters (w_sum,out_err,delta) should be the same size
  */
-__global__ void sigmoid_prime (
-                                float * sum_ji,
-                                float * output
-                              );
+template <typename F>
+__global__ void delta_output (
+                                F const& deriv,
+                                float * sum,
+                                float * ideal,
+                                float * actual,
+                                float * delta,
+                                unsigned int index
+                             )
+{
+    // x is the output neuron/node count (e.g., length of actual & ideal)
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    // Calculate the Negative Error: -(Actual - Ideal)
+    float neg_error = __fmul_rz( -1.f, ( actual[x] - ideal[x]) );
+    float primed = deriv(sum[x+index]);
+    // -E * σ'(Σ(O[i])
+    delta[x+index] = __fmul_rz( neg_error, primed );
+}
+
+///
+/// CUDA kernels for Testing a network
+///
 
 /** 
  * @brief Forward Propagation: `O[j] * W[i]`
@@ -83,22 +187,9 @@ __global__ void sum_columns (
                                 unsigned int width
                             );
 
-/**
- * @brief Delta Error of output layer: `-E * σ'( Σ(W[i]*O[j]) )`
- * @param sum is array of previous layer output dot incoming weights: `Σ ( W[i] * O[j])`
- * @param ideal is array `ideal` output, e.g., the Target output
- * @param actual is array `actual` output
- * @param delta is array of δ[i] of output layer
- * @param size is the amount of nodes in output layer
- * @note all parameters (w_sum,out_err,delta) should be the same size
- */
-__global__ void delta_output (
-                                float * sum,
-                                float * ideal,
-                                float * actual,
-                                float * delta,
-                                unsigned int index
-                             );
+///
+/// CUDA kernels for Training a network
+///
 
 /** 
  * @brief Calculate Delta dot product of weights and next layer node Deltas: `W[ik] * δ[k]`
@@ -161,7 +252,7 @@ __global__ void gradient_descent (
 __global__ void sum_gradients (
                                 float * gradient,
                                 float * new_value
-                              );    
+                              ); 
 
 /**
  * @brief Back-Propagation for all weights: `Δw(t) = ε * ( ∂E / ∂W[i] ) + α * ( Δw(t-1) )`
@@ -180,12 +271,14 @@ __global__ void back_prop (
                             float epsilon
                          );
 
+// TODO: Resilient Back-Prop
+
 /// Calculate the Output Error: (Ideal[i] - Actual[i])^2
 __global__ void squared_error ( 
                                 float * ideal,
                                 float * actual, 
                                 float * errors
-                            );
+                              );
 
 };
 #endif

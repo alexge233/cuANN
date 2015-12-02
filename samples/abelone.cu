@@ -1,15 +1,22 @@
 #include "../src/ann/ann.hpp"
+#include "../src/kernel/kernel.hpp"
 #include <iostream>
 #include <thrust/version.h>
 
-int main (void)
+int main ()
 {
-    std::cout << "Abelone Test" << std::endl;
+    // Activation functor and its derivative
+    cuANN::sigmoid func;
+    cuANN::sigmoid_deriv deriv;
 
-    // WARNING: Too many hidden layers may return zero gradients!
-    cuANN::ann network = cuANN::ann(  10, 5, 1, 1 );
-    cuANN::data train_data = cuANN::data( "abelone.train" );
-    auto mse = network.train( train_data, 0.02f, 1000, 100 ); 
+    // Abelone Network: 10 input neurons, 20 hidden, 2 hidden layers
+    cuANN::ann network = cuANN::ann(10,20,2,1);
+
+    // Train: Load from File
+    cuANN::data train_data = cuANN::data("abelone.train");
+
+    // Train: Activation, Derivative, Data, Epochs, Reports, Threads, Stop Error
+    auto mse = network.train(func,deriv,train_data,1000,100,8,0.02f);
     std::cout << "Trained Abelone with MSE: " << mse << std::endl;
 
     return 0;

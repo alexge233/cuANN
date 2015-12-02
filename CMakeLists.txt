@@ -39,10 +39,10 @@ find_package(Boost COMPONENTS system thread REQUIRED)
 find_package(Threads REQUIRED)
 
 # What does this line do ?
-set(CUDA_ATTACH_VS_BUILD_RULE_TO_CUDA_FILE ON)
+#set(CUDA_ATTACH_VS_BUILD_RULE_TO_CUDA_FILE ON)
 
 # ?
-set(CUDA_SEPERABLE_COMPILATION ON)
+set(CUDA_SEPERABLE_COMPILATION OFF)
 
 # nvcc flags & C++ Flags - NOTE Optimisation can go here
 set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};#-gencode arch=compute_20,code=sm_20
@@ -54,7 +54,10 @@ set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};#-gencode arch=compute_20,code=sm_20
                                        #-DNDEBUG;
                                        #-O3;
                                        -Xcompiler -fPIC;
-                                       --use_fast_math)
+                                       --use_fast_math;
+                                       #--relocatable-device-code=true 
+                                       )
+
 
 add_subdirectory(${SRC})
 add_subdirectory(${SAMPLES})
@@ -64,7 +67,6 @@ cuda_add_library(cuANN
                 ${SRC}/ann/ann.cu
                 ${SRC}/data/data.cu
                 ${SRC}/kernel/kernel.cu
-                ${SRC}/trainer/trainer.cu
                 ${SRC}/trainer/trainer_data.cu
                 ${SRC}/trainer/trainer_pool.cu
                 )

@@ -8,7 +8,6 @@ row::row ( unsigned int in_size, unsigned int out_size )
     output.resize( out_size );
 }
 
-
 data::data ( const std::string filename )
 {
     std::ifstream fs;
@@ -68,17 +67,6 @@ data::data ( const std::string filename )
     }
 
     fs.close();
-    /*
-    std::cout << "loaded: " << rows_.size() << " rows of data" << std::endl;
-    std::cout << num_rows_ << " " << in_vec_size_ << " " << out_vec_size_ << std::endl;
-    for ( const auto & pair : rows_ )
-    {
-        thrust::copy( pair.input.begin(), pair.input.end(), std::ostream_iterator<float>(std::cout, " "));
-        std::cout << std::endl;
-        thrust::copy( pair.output.begin(), pair.output.end(), std::ostream_iterator<float>(std::cout, " "));
-        std::cout << std::endl;
-    }
-    */
 }
 
 int data::size() const
@@ -106,7 +94,7 @@ data::const_iterator data::end() const
     return rows_.end();
 }
 
-const row & data::operator[] (const int idx ) const
+const row & data::operator[](const int idx) const
 {
   if( idx < 0 || idx > rows_.size() )
     throw std::runtime_error ("data::operator[] idx out of bounds");
@@ -114,4 +102,21 @@ const row & data::operator[] (const int idx ) const
   return rows_[idx];
 }
 
+void data::shuffle()
+{
+    auto prng = std::default_random_engine{};
+    prng.seed( std::random_device{}() );
+    std::shuffle( std::begin(rows_), std::end(rows_), prng);
+}
+
+void data::print() const
+{
+    for ( const auto & pair : rows_ )
+    {
+        thrust::copy( pair.input.begin(), pair.input.end(), std::ostream_iterator<float>(std::cout, " "));
+        std::cout << std::endl;
+        thrust::copy( pair.output.begin(), pair.output.end(), std::ostream_iterator<float>(std::cout, " "));
+        std::cout << std::endl;
+    }
+}
 }

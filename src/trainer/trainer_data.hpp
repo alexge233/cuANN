@@ -58,18 +58,25 @@ struct trainer_data
 
     /// Node Sums Input `Σ( O[j] ) - The input to a node from all connecting nodes
     thrust::device_vector<float> node_sums;
+
     /// Node Deltas `δ[i]` - For all nodes
     thrust::device_vector<float> node_deltas;
+    
     /// Primed Sums `σ'( Σ( O[j] * W[ij] ) )` - Used for Node Delta
     thrust::device_vector<float> primed_sums;
+    
     /// Node Outputs `Ο[i]` of all nodes in all layers - Used for Node Delta
     thrust::device_vector<float> nodes_output;
+    
     /// Weight Gradients `∂E/∂W[ik]`
     thrust::device_vector<float> gradients;
+    
     /// Ideal/Target Output
     thrust::device_vector<float> ideal_out;
+    
     /// Input values / Input Pattern
     thrust::device_vector<float> input;
+    
     /// Squared Errors for a single Input Pattern
     thrust::device_vector<float> sq_errors;
 };

@@ -13,9 +13,11 @@ int main (void)
     thrust::device_vector<float> in_vec(x_in,x_in+4);
     float x_out[2] { 1.f, 0.f};
     thrust::device_vector<float> out_vec(x_out,x_out+2);
+    /*
     thrust::host_vector<float> output = large_net.propagate(in_vec);
     std::cout << "output" << std::endl;
     for ( auto val : output )
         std::cout << val << std::endl;
+    */
     return 0;
 }

@@ -3,10 +3,10 @@
 namespace cuANN
 {
 
-trainer_pool::trainer_pool ( 
-                             unsigned int max_threads,
-                             const std::vector<std::shared_ptr<trainer_data>> & thread_data
-                           )
+trainer_pool::trainer_pool(
+                            unsigned int max_threads,
+                            std::vector<std::shared_ptr<trainer_data>> & thread_data
+                          )
 : _max_threads_(max_threads), _work(_io_service), _thread_data(thread_data)
 {}
  
@@ -50,17 +50,4 @@ void trainer_pool::reduce()
     }
 }
 
-void trainer_pool::submit(cuANN::trainer & job)
-{
-    // TODO: Search into trainer_data vector and find the first `available` object
-
-    std::unique_lock<std::mutex> lock(_cvm);
-    ++ _tasks;
-    lock.unlock();
-    _io_service.post([this,job] () mutable
-                     {
-                         job();
-                         reduce();
-                     });
-}
 }
