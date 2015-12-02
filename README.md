@@ -35,4 +35,5 @@ If you wish to change the CUDA Compute to an earlier version, do so by editing t
 You can browse the *simple exclusive* or (XOR) example under `samples/`, or the more complex *Abelone*.
 The data used to train them is the same as with libFANN.
 
-## NOTE: Current implementation is not using enough of the GPU available computability.
+### NOTE: Current implementation is not using enough of the GPU available computability.
+### WARNING: This is an alpha version
