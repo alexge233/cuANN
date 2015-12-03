@@ -94,8 +94,8 @@ protected:
     unsigned int output_neurons_;
     unsigned int hidden_layers_;
     unsigned int per_layer_;
-    float alpha_;
-    float epsilon_;
+    float alpha_ = 0.1f;
+    float epsilon_ = 1.0f;
     /// Weight matrix for all nodes
     thrust::device_vector<float> weights_;
     /// Index tracks of where Weights begin and end (per layer increments) for fully connected network

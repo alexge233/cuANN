@@ -110,7 +110,7 @@ __host__ float ann::epoch (
                               thrust::device_vector<float> & errors
                           )
 {
-    // We need to zero-fill the gradients, and errors
+    // We need to zero-fill the gradients, else we are summing gradients for all epochs!
     thrust::fill(gradients.begin(),gradients.end(),0.f);
     thrust::fill(errors.begin(),errors.end(),0.f);
 
@@ -133,6 +133,7 @@ __host__ float ann::epoch (
                                                          epsilon_ );   
     // Reduce Squared errors to MSE
     float epoch_squared_errors = thrust::reduce(errors.begin(),errors.end());
+    cudaDeviceSynchronize();
     return (epoch_squared_errors / errors.size());
 }
 };

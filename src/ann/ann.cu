@@ -87,10 +87,6 @@ __host__ ann::ann (
                         index_sequence_begin + weights_.size(),
                         weights_.begin(),
                         prg( upper, lower, seed ) );
-    // momentum
-    alpha_ = 0.3;
-    // learning rate
-    epsilon_ = 0.7;
 
     std::cout << "input neurons: " << input_neurons << std::endl;
     std::cout << "hidden neurons: " << hidden_neurons_ << " (per layer: " << per_layer_ << ")" << std::endl;
