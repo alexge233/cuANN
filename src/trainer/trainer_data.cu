@@ -2,7 +2,6 @@
 
 namespace cuANN
 {
-
 __host__ trainer_data::trainer_data ( 
                                         const thrust::device_vector<float> & weights,
                                         thrust::device_vector<float> & gradient_sums,
@@ -15,8 +14,8 @@ __host__ trainer_data::trainer_data (
                                         unsigned int nodes_per_hidden_layer
                                   )
 : weight_ref(weights),
-  grad_sums_ref(gradients),
-  glob_errors_ref(global_errors),
+  epoch_gradients(gradient_sums),
+  epoch_errors(global_errors),
   weight_idx_ref(weight_index),
   grad_sums_mtx(gradient_mutex),
   // delta size = hidden nodes + output nodes
@@ -26,25 +25,12 @@ __host__ trainer_data::trainer_data (
   hidden_size(size_hidden),
   n_per_hl(nodes_per_hidden_layer)
 {
-    // Node Input Sums - Hidden & Output (Not Input)
     node_sums = thrust::device_vector<float>(delta_size);
-
-    // Node deltas - Hidden & Output (Not Input)
     node_deltas = thrust::device_vector<float>(delta_size);
-
-    // Used by Node Delta = Node Outputs = #of Node Deltas
     primed_sums = thrust::device_vector<float>(delta_size);
-
-    // Used for Node Delta - Input & Hidden & Output (node count)
-    nodes_output = thrust::device_vector<float>(input_size+hidden_size+output_size);
-
-    // Ideal/Target Output array
-    ideal_out = thrust::device_vector<float>(output_size);
-
-    // Input Array
+    node_outputs = thrust::device_vector<float>(input_size+hidden_size+output_size);
+    actual_output = thrust::device_vector<float>(output_size);
     input = thrust::device_vector<float>(input_size);
-
-    // Squared Errors
-    sq_errors = thrust::device_vector<float>(output_size);
+    gradients = thrust::device_vector<float>(weight_ref.size()); 
 }
 };

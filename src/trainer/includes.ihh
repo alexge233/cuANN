@@ -12,3 +12,7 @@
 #include <thrust/device_vector.h>
 #include <thrust/fill.h>
 #include <thrust/execution_policy.h>
+
+#include "kernel/kernel.hpp"
+#include "dim_find/dim_find.hpp"
+

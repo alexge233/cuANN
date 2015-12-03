@@ -4,14 +4,26 @@
 namespace cuANN
 {
 
+/// Signum function, 1 if > 0, 0 if 0, -1 if < 0
+__device__ static float sgn(const float x)
+{
+    return (0.f < x) - (x < 0.f);
+}  
+
+// Hyperbolic Tangent - Non Scaled
+__device__ static float tan_h(const float x)
+{
+    float exp2x = __expf(2.f*x);
+    return __fdividef((exp2x-1.f),__fadd_rz(exp2x,1.f));
+}
+
 /// Sigmoid: `σ(x) = 1 / 1 + e^( -x )`
 struct sigmoid
 {
     sigmoid()=default;
     __device__ float operator()(const float x) const
     {
-        float exp_val = __expf(-x);
-        float denom = __fadd_rz(1.f,exp_val);
+        float denom = __fadd_rz(1.f,__expf(-x));
         return __fdividef(1.f,denom);
     }
 };
@@ -48,9 +60,9 @@ struct sigmoid_bipolar_deriv
     {
         float nom = __fadd_rz(-1.f,2.f);
         float denom = __fadd_rz(1.f,__expf(-x));
-        float _sig= __fdividef(nom,denom);
-        float rhs = 1.f-_sig;
-        float lhs = __fadd_rz(1.f,_sig);
+        float sig= __fdividef(nom,denom);
+        float rhs = 1.f-sig;
+        float lhs = __fadd_rz(1.f,sig);
         float inner= __fmul_rz(lhs,rhs);
         return __fmul_rz(0.5f,inner);
     }
@@ -65,9 +77,8 @@ struct tanh_scaled
     __device__ float operator()(const float x) const
     {
         float value = __fmul_rz(__fdividef(2.f,3.f),x);
-        float exp2x = __expf(2.f*value);
-        float tn_val= __fdividef((exp2x-1.f),__fadd_rz(exp2x,1.f));
-        return __fmul_rz(1.7159f,tn_val);
+        float tanh_vl= tan_h(value); 
+        return __fmul_rz(1.7159f,tanh_vl);
     }
 };
 
@@ -77,7 +88,10 @@ struct tanh_scaled_deriv
     tanh_scaled_deriv()=default;
     __device__ float operator()(const float x) const
     {
-        // TODO
+        float value = __fmul_rz(__fdividef(2.f,3.f),x);
+        float tanh_vl = tan_h(value);
+        float tanh_sq = __fmul_rz(tanh_vl,tanh_vl);
+        return __fmul_rz(1.14393f,(1.f-tanh_sq));
     }
 };
 
@@ -97,7 +111,9 @@ struct soft_sign_deriv
     soft_sign_deriv()=default;
     __device__ float operator()(const float x) const
     {
-        // TODO
+        float inner = __fadd_rz(1.f,fabsf(x));
+        float in_sq = __fmul_rz(inner,inner);
+        return __fdividef(sgn(x),in_sq);
     }
 };
 
@@ -199,8 +215,8 @@ __global__ void sum_columns (
  * @note X grid is layer i nodes (could differ from k nodes)
  */
 __global__ void delta_product (
-                                float * w_ik,
-                                float * d_k,
+                                const float * w_ik,
+                                const float * d_k,
                                 float * output,
                                 unsigned int width
                               );
@@ -246,7 +262,7 @@ __global__ void gradient_descent (
 
 /**
  * @brief Summarize Gradients for an entire Epoch 
- * @param gradient will be updates (the storage array)
+ * @param gradient will be updated (the storage array)
  * @param new_value is the value to be added (the temp array)
  */
 __global__ void sum_gradients (

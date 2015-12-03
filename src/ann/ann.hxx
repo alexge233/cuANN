@@ -1,7 +1,7 @@
 namespace cuANN 
 {
 
-template <class A> inline
+template <class A>
 __host__ thrust::host_vector<float> ann::propagate ( 
                                                         A const& func,
                                                         thrust::device_vector<float> & input 
@@ -39,7 +39,7 @@ __host__ thrust::host_vector<float> ann::propagate (
     return output;
 }
 
-template <class A,class D> inline
+template <class A,class D> 
 __host__ float ann::train (
                               A const& func,
                               D const& deriv,
@@ -54,7 +54,7 @@ __host__ float ann::train (
     thrust::device_vector<float> gradients( weights_.size() );
     // The old (previous) Delta Updates `Δw(t-1)`
     thrust::device_vector<float> updates( weights_.size() );
-    // Squared Errors (not Mean'ed yet)
+    // Epoch Squared Errors (not Mean'ed yet)
     thrust::device_vector<float> sq_errors( train_data.size()*train_data.output_size() );
 
     // Gradients (Sums) mutex - each thread will update by summing the Pattern's gradients
@@ -75,9 +75,8 @@ __host__ float ann::train (
 
     // trainer thread pool - max threads and thread_data allocated on device memory
     cuANN::trainer_pool thread_pool(max_threads,thread_data);
+    thread_pool.start();
 
-    // Wait for all allocations to finish.
-    cudaDeviceSynchronize();
     float mse = 0.0;
 
     // Iterate epochs and compare mse
@@ -86,7 +85,6 @@ __host__ float ann::train (
     {
         // Run an epoch and get its MSE: activation func, derivative func, training data, thread pool, thread data
         mse = epoch(func,deriv,train_data,thread_pool,gradients,updates,sq_errors);
-
         // Report if needed
         if ( k == reports && k != 0 )
         {
@@ -97,6 +95,7 @@ __host__ float ann::train (
         k++;
         if (mse < stop_error) break;
     }
+    thread_pool.stop();
     return mse;
 }
 
@@ -108,40 +107,32 @@ __host__ float ann::epoch (
                               cuANN::trainer_pool & thread_pool,
                               thrust::device_vector<float> & gradients,
                               thrust::device_vector<float> & updates,
-                              thrust::device_vector<float> & sq_errors
+                              thrust::device_vector<float> & errors
                           )
 {
-    thread_pool.start();
+    // We need to zero-fill the gradients, and errors
+    thrust::fill(gradients.begin(),gradients.end(),0.f);
+    thrust::fill(errors.begin(),errors.end(),0.f);
 
     // Iterate training set, spawning a thread for each pattern
-    for (int i=0; i< dataset.size(); i++)
+    for (int i = 0; i< dataset.size(); i++)
     {
-        // a `trainer` takes as arguments: activation func, deriv func, etc...
-        // then submit it to the thread pool
-        // thread_pool.submit( ... );
+        // create a `trainer` thread object for the `tread_pool` && then submit it to the thread pool
+        auto obj = cuANN::trainer<A,D>(func,deriv,dataset[i].input,dataset[i].output,alpha_,epsilon_,i);
+        thread_pool.submit<A,D>(obj);
     }
     // When all threads have finished, we can then update the weights and calculate the mean squared errors
     thread_pool.wait();
-    thread_pool.stop();
-
-
-    /* -- NOTE : BELOW IS THE OLD WORKING CODE --
-    // TODO: We will only be doing Batch training: 
-    // TODO: back_prop will be non-threaded, and will happen once all pattern threads have finished.
-    // TODO: We also need to calculate MSE after the loop
 
     // Do back-prop here
-    float * grad_ptr = thrust::raw_pointer_cast( gradients.data() );                // Summed gradients from entire epoch
-    float * weight_ptr = thrust::raw_pointer_cast( weights_.data() );               // All weights
-    float * update_ptr = thrust::raw_pointer_cast( updates.data() );                // Previous update values
-    auto dim_bp = dim1D( weights_.size() );
-    back_prop<<<dim_bp.num_blocks_x,dim_bp.block_threads_x>>>( weight_ptr, grad_ptr, update_ptr, alpha_, epsilon_ );   
-    cudaDeviceSynchronize();
-
+    auto dim = dim1D( weights_.size() );
+    back_prop<<<dim.num_blocks_x,dim.block_threads_x>>>( thrust::raw_pointer_cast(weights_.data()), 
+                                                         thrust::raw_pointer_cast(gradients.data()), 
+                                                         thrust::raw_pointer_cast(updates.data()), 
+                                                         alpha_, 
+                                                         epsilon_ );   
     // Reduce Squared errors to MSE
-    float sq_errors = thrust::reduce( errors.begin(), errors.end() );
-    return (sq_errors / total);
-    */
-    return  0;
+    float epoch_squared_errors = thrust::reduce(errors.begin(),errors.end());
+    return (epoch_squared_errors / errors.size());
 }
 };

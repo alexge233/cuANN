@@ -51,8 +51,8 @@ set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};#-gencode arch=compute_20,code=sm_20
                                        -std=c++11;
                                        -DVERBOSE;
                                        #-DTHRUST_DEBUG;
-                                       #-DNDEBUG;
-                                       #-O3;
+                                       -DNDEBUG;
+                                       -O3;
                                        -Xcompiler -fPIC;
                                        --use_fast_math;
                                        #--relocatable-device-code=true 
@@ -68,7 +68,6 @@ cuda_add_library(cuANN
                 ${SRC}/data/data.cu
                 ${SRC}/kernel/kernel.cu
                 ${SRC}/trainer/trainer_data.cu
-                ${SRC}/trainer/trainer_pool.cu
                 )
 
 # Link with Boost and pthreads - This must be TESTED

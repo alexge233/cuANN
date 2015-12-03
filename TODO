@@ -1,15 +1,18 @@
-25.11.2015
+01.12.2015
 TODO:
-        A. Fix, update, migrate and finish Multi-threaded Epochs 
-           @see Projects/TESTS/boost_thread_reuse/
+        1. Simple XOR with 1 thread works fine !!!
+           Experiment with multiple threads
 
-        B. Due to the templating of activation functions & derivatives
-           we can now do `train` with template params: Activation Func, Activation Derivative Func.
-           Same for propagate.
-           Ideally, maybe they should be used either at construction time, or we could (not should)
-           template the entire class?
+        2. Go through classes `trainer` and `trainer_data` there are a lot of TODO's.
+           There are still memory allocations which we can avoid.
 
-        C. Create (de)serialisation for class ann: 
+        3. Examine which kernels rely on previous values (theres only a few).
+           The shared data across `trainer_data` should be zero'ed-filled for those calls.
+
+        4. Create (de)serialisation for class ann: 
            Saving and Loading (Using BOOST) of a Trained network.
 
-        D. Bias neurons: Although not nessesary, it would be nice to have them if needed?
+        5. Implement Resilient-Back-Propagation
+
+        6. Examine and Experiment using other activation functors and their derivatives.
+           Create a more examples, using well know training data-sets.

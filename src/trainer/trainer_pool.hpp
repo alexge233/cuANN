@@ -16,33 +16,64 @@ public:
     trainer_pool ( 
                     unsigned int max_threads,
                     std::vector<std::shared_ptr<trainer_data>> & thread_data
-                 );
+                 )
+    : _max_threads_(max_threads), _work(_io_service), _thread_data(thread_data)
+    {}
 
     /// Start processing threads
-    void start();
+    void start()
+    {
+        _threads.reserve(_max_threads_);
+        for (int i = 0 ; i < _max_threads_; ++i)
+            _threads.emplace_back(std::bind(&trainer_pool::thread_proc, this));
+    }
     
     /// Wait for the next available slot
-    void wait();
+    void wait()
+    {   
+        std::unique_lock<std::mutex> lock(_cvm); 
+        _cv.wait(lock, [this] { return _tasks == 0; });
+    }
     
     /// Wait for all threads to finish and stop
-    void stop();
-    
+    void stop()
+    {   
+        wait();
+        _io_service.stop();
+        for (auto& t : _threads) 
+        {
+            if (t.joinable())
+                t.join();
+        }
+        _threads.clear();
+    }
+
     /// Process threads 
-    void thread_proc();
+    void thread_proc()
+    {   
+        while (!_io_service.stopped())
+            _io_service.run();
+    }
     
     /// Reduce count
-    void reduce();
+    void reduce() 
+    {
+        std::unique_lock<std::mutex> lock(_cvm);
+        if (--_tasks == 0) {
+            lock.unlock();
+            _cv.notify_all();
+        }
+    }
     
     /// Submit a new Job (worker)    
     template <class A,class D>
-    void submit( cuANN::trainer<A,D> & job)
+    void submit(cuANN::trainer<A,D> & job)
     {
         std::unique_lock<std::mutex> lock(_cvm);
         ++ _tasks;
         lock.unlock();
         _io_service.post([this,job] () mutable
                          {
-                             // Need to pass `_thread_data` as a parameter here
                              job(_thread_data);
                              reduce();
                          });

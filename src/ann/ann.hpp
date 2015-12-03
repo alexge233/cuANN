@@ -33,7 +33,7 @@ public:
     /// @param stop_error will stop training if that MSE is achieved
     /// @param epochs denotes for how many epochs will the network be trained
     /// @param reports defines the interval of epochs used to report on MSE on screen (use 0 for no reports)
-    template <class A, class D>
+    template <class A,class D>
     float train (
                   A const& func,
                   D const& deriv,
@@ -52,7 +52,7 @@ public:
                                             A const& func,
                                             thrust::device_vector<float> & input 
                                          ) const;
-private:
+protected:
 
     /// @brief This is a Training Epoch
     /// @param dataset is the training data set used to train the network.
@@ -66,7 +66,7 @@ private:
     /// Using Sigmoid Prime σ'(x) = σ(x) * ( 1 - σ(x) )
     /// Then get the Gradient of each Weight: `∂E / ∂W[ik]`
     /// Finally, use Back-Propagation (Batch Training)
-    template <class A, class D>
+    template <class A,class D>
     float epoch (
                     A const& func,
                     D const& deriv,

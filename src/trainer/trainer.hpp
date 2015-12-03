@@ -28,7 +28,6 @@ public:
     trainer (
                A const& func,
                D const& deriv,
-               const std::shared_ptr<cuANN::trainer_data> trainer_data,
                const thrust::host_vector<float> & input,
                const thrust::host_vector<float> & output,
                float alpha,
@@ -37,31 +36,49 @@ public:
             );
 
     // This is the method that the thread pool calls
-    void operator()( std::vector<std::shared_ptr<trainer_data>> & thread_data ) const;
+    void operator()(std::vector<std::shared_ptr<trainer_data>> & thread_data);
     
 private:
 
-    // TODO: Forward prop, store sums, ouputs and final actual out
-    void forward_prop( );
+    /// @brief Activate Input and forward-propagate: `Σ( O[j] * W[ji] )`
+    /// @param ptr is the `trainer data` object we use for device memory calculations
+    /// @note Store all node output & all node input sums    
+    void fw_propagate(const std::shared_ptr<trainer_data> & ptr);
 
-    // TODO: Delta[k] last layer (output) delta
-    void delta_output( );
+    // Sum Input * Weight Propagation: `Σ( O[j] * W[ji] )` for a layer
+    thrust::device_vector<float> layer_product( 
+                                                 unsigned int weights_begin,
+                                                 unsigned int weights_end,
+                                                 const thrust::device_vector<float> & input,
+                                                 const std::shared_ptr<trainer_data> & ptr
+                                              );
 
-    // TODO: Delta[i] for all hidden layers
-    void delta_hidden( );
+    // Calculate Output Node Delta: `-E * σ'(Σ(O[i])`
+    void output_node_delta(const std::shared_ptr<trainer_data> & ptr);
 
-    // TODO: Gradient calculation: update global shared gradients array
-    void grad_calc( );
+    // Prime the Input Node Sums using the activation derivative: `σ'(Σ[ji])` 
+    void primed_sums(const std::shared_ptr<trainer_data> & ptr);
 
-    // TODO: Error calculation: update global shared errors array
-    void error_calc( );
+    // Calculate Node Delta[i] for hidden layers: `σ'( Σ[ji] ) * Σ( W[ik] * δ[k] )`
+    void hidden_node_delta(const std::shared_ptr<trainer_data> & ptr);
 
-    A & _func;
-    D & _deriv;
+    // Calculate Weight Gradient: `∂E/∂W[ik] = δ[k] * O[i]`
+    void calc_weight_gradients(const std::shared_ptr<trainer_data> &ptr);
+
+    // Calculate Squared Errors: Error = (Ideal - Actual)^2 for each Output node value 
+    void calc_squared_errors(const std::shared_ptr<trainer_data> &ptr);
+
+    // Activation and Derivative
+    const A & _func;
+    const D & _deriv;
+    // Learning and Momentum rates
     const float _a;
     const float _e;
+    // Pattern index
     const unsigned int _i;
-    const std::shared_ptr<cuANN::trainer_data> _dmem;
+    // Input and Output Patterns (host mem)
+    thrust::host_vector<float> _input;
+    thrust::host_vector<float> ideal_output;
 };
 }
 #include "trainer.hxx"

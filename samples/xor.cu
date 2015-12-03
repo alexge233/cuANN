@@ -11,14 +11,14 @@ int main (void)
     cuANN::sigmoid_deriv deriv;
 
     // Create a XOR Network: 2 input, 4 hidden neurons, 1 hidden layer, 1 output neurons
-    cuANN::ann xor_net = cuANN::ann(2,4,1,1);
+    cuANN::ann xor_net = cuANN::ann(2,6,1,1);
     //xor_net.print_weights();
 
     // load the training data & print it on screen
     cuANN::data train_data = cuANN::data("xor.data");
 
     // Train: Activation, Derivative, Data, Epochs, Reports, Threads, Stop Error
-    float mse = xor_net.train(func,deriv,train_data,10000,1000,1,0.02f);
+    float mse = xor_net.train<cuANN::sigmoid,cuANN::sigmoid_deriv>(func,deriv,train_data,30000,1000,4,0.02f);
     std::cout << "Trained Network with MSE: " << mse << std::endl;
 
     std::cout << "Testing with [1,0] as input" << std::endl;
