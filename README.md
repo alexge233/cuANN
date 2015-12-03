@@ -1,5 +1,5 @@
 # cuANN
-THIS IS WORK IN PROGRESS - STILL INCOMPLETE - PLZ COME BACK LATER
+THIS IS WORK IN PROGRESS - STILL INCOMPLETE - This is the beta version
 
 Artificial Neural Network for CUDA
 
@@ -12,7 +12,7 @@ cuANN is written in a minimalistic way, as I'm learning how Neural Networks work
 It is inspired by FANN, which has for a long time been the most widely used ANN library.
 However, thanks to GPGPU, cuANN aspires to help you use large Neural Networks on your NVIDIA GPU.
 
-This version (0.1) is written with CUDA Compute 3.0 in mind, and is tested on a GTX660.
+This version (0.2) is written with CUDA Compute 3.0 in mind, and is tested on a GTX660.
 
 In order to build:
 
