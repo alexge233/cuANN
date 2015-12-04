@@ -54,7 +54,7 @@ public:
                                          ) const;
 protected:
 
-    /// @brief This is a Training Epoch
+    /// @brief This is a Back-Propagation Batch Training Epoch
     /// @param dataset is the training data set used to train the network.
     /// @param thread_pool is the trainer worker pool of parallel threads.
     /// @param thread_data is a vector of totally allocated thread data objects.
@@ -64,7 +64,7 @@ protected:
     /// @return MSE: Mean-Square Error
     /// Calculate the Delta Rule: `σ'( Σ[ji] ) * Σ( W[ik] * δ[k] )`
     /// Using Sigmoid Prime σ'(x) = σ(x) * ( 1 - σ(x) )
-    /// Then get the Gradient of each Weight: `∂E / ∂W[ik]`
+    /// Then get the Gradient of each Weight: `∂E/∂W[ik]`
     /// Finally, use Back-Propagation (Batch Training)
     template <class A,class D>
     float epoch (
@@ -94,8 +94,8 @@ protected:
     unsigned int output_neurons_;
     unsigned int hidden_layers_;
     unsigned int per_layer_;
-    float alpha_ = 0.1f;
-    float epsilon_ = 1.0f;
+    float alpha_ = .9f;
+    float epsilon_ = .3f;
     /// Weight matrix for all nodes
     thrust::device_vector<float> weights_;
     /// Index tracks of where Weights begin and end (per layer increments) for fully connected network

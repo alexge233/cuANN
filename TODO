@@ -1,18 +1,26 @@
 01.12.2015
 TODO:
-        1. Simple XOR with 1 thread works fine !!!
-           Experiment with multiple threads
 
-        2. Go through classes `trainer` and `trainer_data` there are a lot of TODO's.
+        BUG: tanh_scaled & tanh_scaled_derivative produce a 'nan' MSE - FIX THIS
+
+        0. ann::train should take learning and momemntum params.
+
+        1. Go through classes `trainer` and `trainer_data` there are a lot of TODO's.
            There are still memory allocations which we can avoid.
 
-        3. Examine which kernels rely on previous values (theres only a few).
+        2. Examine which kernels rely on previous values (theres only a few).
            The shared data across `trainer_data` should be zero'ed-filled for those calls.
 
-        4. Create (de)serialisation for class ann: 
+        3. Create (de)serialisation for class ann: 
            Saving and Loading (Using BOOST) of a Trained network.
 
-        5. Implement Resilient-Back-Propagation
+        4. Implement Resilient-Back-Propagation
 
-        6. Examine and Experiment using other activation functors and their derivatives.
+        5. Examine and Experiment using other activation functors and their derivatives.
            Create a more examples, using well know training data-sets.
+           It is important that I have a Deep Network working BEFORE the end of December!!!
+
+        6. It would be nice to be able to save on a file the actual recorded MSE's.
+
+        7. I may need a "test" function which takes as an argument a "test.file"
+           and then runs propagations, finding what the MSE on unseens data actually is.

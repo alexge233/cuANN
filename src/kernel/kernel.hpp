@@ -23,7 +23,7 @@ struct sigmoid
     sigmoid()=default;
     __device__ float operator()(const float x) const
     {
-        float denom = __fadd_rz(1.f,__expf(__fmul_rz(-1.f,x)));
+        float denom = __fadd_rz(1.f,__expf(-x));
         return __fdividef(1.f,denom);
     }
 };
@@ -34,7 +34,7 @@ struct sigmoid_deriv
     sigmoid_deriv()=default;
     __device__ float operator()(const float x) const
     {
-        float denom = __fadd_rz(1.f,__expf(__fmul_rz(-1.f,x)));
+        float denom = __fadd_rz(1.f,__expf(-x));
         float sig= __fdividef(1.f,denom);
         return __fmul_rz(sig,(1.f-sig));
     }
@@ -46,7 +46,7 @@ struct sigmoid_bipolar
     __device__ float operator()(const float x) const
     {
         float nom = __fadd_rz(-1.f,2.f);
-        float denom = __fadd_rz(1.f,__expf(__fmul_rz(-1.f,x)));
+        float denom = __fadd_rz(1.f,__expf(-x));
         return __fdividef(nom,denom);
     }
 };
@@ -58,7 +58,7 @@ struct sigmoid_bipolar_deriv
     __device__ float operator()(const float x) const
     {
         float nom = __fadd_rz(-1.f,2.f);
-        float denom = __fadd_rz(1.f,__expf(__fmul_rz(-1.f,x)));
+        float denom = __fadd_rz(1.f,__expf(-x));
         float sig= __fdividef(nom,denom);
         float rhs = 1.f-sig;
         float lhs = __fadd_rz(1.f,sig);

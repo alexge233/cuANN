@@ -50,6 +50,8 @@ __host__ float ann::train (
                               float stop_error
                           )
 {
+    std::cout << "Epochs: " << epochs << " CPU Threads: " << max_threads << " Stop-Error: " << stop_error << std::endl;
+
     // Weight gradients (Row-Major) - NOTE: those are Summed for each Pattern, during each Epoch 
     thrust::device_vector<float> gradients( weights_.size() );
     // The old (previous) Delta Updates `Δw(t-1)`
@@ -85,12 +87,13 @@ __host__ float ann::train (
     {
         // Run an epoch and get its MSE: activation func, derivative func, training data, thread pool, thread data
         mse = epoch(func,deriv,train_data,thread_pool,gradients,updates,sq_errors);
+        // Shuffle training data
+        train_data.shuffle();
         // Report if needed
         if ( k == reports && k != 0 )
         {
             std::cout << "Epoch "<< i << " MSE: " << mse  << std::endl;
             k = 0;
-            train_data.shuffle();
         }
         k++;
         if (mse < stop_error) break;
@@ -123,6 +126,7 @@ __host__ float ann::epoch (
     }
     // When all threads have finished, we can then update the weights and calculate the mean squared errors
     thread_pool.wait();
+    cudaDeviceSynchronize();
 
     // Do back-prop here
     auto dim = dim1D( weights_.size() );
@@ -131,9 +135,10 @@ __host__ float ann::epoch (
                                                          thrust::raw_pointer_cast(updates.data()), 
                                                          alpha_, 
                                                          epsilon_ );   
-    // Reduce Squared errors to MSE
+    // Sum squared errors
     float epoch_squared_errors = thrust::reduce(errors.begin(),errors.end());
     cudaDeviceSynchronize();
+    // Return Mean-Squared Errors
     return (epoch_squared_errors / errors.size());
 }
 };

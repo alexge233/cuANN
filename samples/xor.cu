@@ -18,7 +18,7 @@ int main (void)
     cuANN::data train_data = cuANN::data("xor.data");
 
     // Train: Activation, Derivative, Data, Epochs, Reports, Threads, Stop Error
-    float mse = xor_net.train<cuANN::sigmoid_bipolar,cuANN::sigmoid_bipolar_deriv>(func,deriv,train_data,30000,1000,1,0.02f);
+    float mse = xor_net.train<cuANN::sigmoid_bipolar,cuANN::sigmoid_bipolar_deriv>(func,deriv,train_data,100000,1000,4,0.002f);
     std::cout << "Trained Network with MSE: " << mse << std::endl;
 
     std::cout << "Testing with [1,0] as input" << std::endl;

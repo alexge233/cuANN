@@ -80,14 +80,11 @@ cuda_compile(XOR_O ${SAMPLES}/xor.cu )
 cuda_add_executable(xor ${XOR_O})
 target_link_libraries(xor cuANN)
 
-# the Testing Sample
-cuda_compile(TEST_O ${SAMPLES}/test.cu)
-cuda_add_executable(test_net ${TEST_O})
-target_link_libraries(test_net cuANN)
-
 # Abelone Sample
 cuda_compile(ABEL_O ${SAMPLES}/abelone.cu)
 cuda_add_executable(abelone ${ABEL_O})
 target_link_libraries(abelone cuANN)
+
+# TODO: Add more Samples
 
 # and Finally, define the install location
