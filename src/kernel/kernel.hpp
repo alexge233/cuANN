@@ -10,13 +10,6 @@ __device__ static float sgn(const float x)
     return (0.f < x) - (x < 0.f);
 }  
 
-// Hyperbolic Tangent - Non Scaled
-__device__ static float tan_h(const float x)
-{
-    float exp2x = __expf(2.f*x);
-    return __fdividef((exp2x-1.f),__fadd_rz(exp2x,1.f));
-}
-
 /// Sigmoid: `σ(x) = 1 / 1 + e^( -x )`
 struct sigmoid
 {
@@ -45,9 +38,8 @@ struct sigmoid_bipolar
 {
     __device__ float operator()(const float x) const
     {
-        float nom = __fadd_rz(-1.f,2.f);
         float denom = __fadd_rz(1.f,__expf(-x));
-        return __fdividef(nom,denom);
+        return __fdividef(1,denom);
     }
 };
 
@@ -57,49 +49,69 @@ struct sigmoid_bipolar_deriv
     sigmoid_bipolar_deriv()=default;
     __device__ float operator()(const float x) const
     {
-        float nom = __fadd_rz(-1.f,2.f);
-        float denom = __fadd_rz(1.f,__expf(-x));
-        float sig= __fdividef(nom,denom);
-        float rhs = 1.f-sig;
-        float lhs = __fadd_rz(1.f,sig);
+        float denom = __fadd_rz(1,__expf(-x));
+        float sig= __fdividef(1,denom);
+        float rhs = 1-sig;
+        float lhs = __fadd_rz(1,sig);
         float inner= __fmul_rz(lhs,rhs);
-        return __fmul_rz(0.5f,inner);
+        return __fmul_rz(0.5,inner);
     }
 };
 
-/// Hyperbolic Tangent: `tanh(x) = e^(x) - e^(-x) / e^(x) + e^(-x)i`
-/// Tanh Scaled: `1.7159 * tanh(2.f/3.f*x)`
+/// Normal Hyperbolic Tangent: `tanh(x) = e^(x) - e^(-x) / e^(x) + e^(-x)i`
+struct tanh_norm
+{
+    tanh_norm()=default;
+    __device__ float operator()(const float x) const
+    {
+        return tanhf(x);
+    }
+};
+
+/// Normal Hyperbolic Tangent Derivative: `1 / cosh^2(x)`
+struct tanh_norm_deriv
+{
+    tanh_norm_deriv()=default;
+    __device__ float operator()(const float x) const
+    {
+        float cosh_x = coshf(x);
+        return __fdividef(1,__fmul_rz(cosh_x,cosh_x));
+    }
+};
+
+/// Scaled Hyperbolic Tangent: `1.7159 * tanh(2.f/3.f*x)`
 /// @note: The function is scaled in range {-1,1} to avoid learning saturation
 struct tanh_scaled
 {
     tanh_scaled()=default;
     __device__ float operator()(const float x) const
     {
-        float value = __fmul_rz(__fdividef(2.f,3.f),x);
-        float tanh_vl= tan_h(value); 
-        return __fmul_rz(1.7159f,tanh_vl);
+        float value = __fmul_rz(0.666666667,x);
+        float tanh_vl=  tanhf(value);
+        return __fmul_rz(1.7159,tanh_vl);
     }
 };
 
 /// Tanh: `σ'(x) = 1.14393 * (1- tanh^2 ( 2/3 * x))`
+/// ∴ σ'(x) = 0.6667/1.7159 * (1.7159 - σ(x)) * (1.7159 + σ(x) )
 struct tanh_scaled_deriv
 {
     tanh_scaled_deriv()=default;
     __device__ float operator()(const float x) const
     {
-        float value = __fmul_rz(__fdividef(2.f,3.f),x);
-        float tanh_vl = tan_h(value);
-        float tanh_sq = __fmul_rz(tanh_vl,tanh_vl);
-        return __fmul_rz(1.14393f,(1.f-tanh_sq));
+        float tanh_vl = tanhf(__fmul_rz(0.666666667,x));
+        float dot = __fmul_rz((1.7159-tanh_vl),__fadd_rz(1.7159,tanh_vl));
+        return __fmul_rz(0.38852303,dot);
     }
 };
 
 /// Softsign: `σ(x) = x / 1 + abs( x )`
 struct soft_sign
 {
+    soft_sign()=default;
     __device__ float operator()(const float x) const
     {
-        float denom = __fadd_rz(1.f,fabsf(x));
+        float denom = __fadd_rz(1,fabsf(x));
         return __fdividef(x,denom);
     }
 };
@@ -110,7 +122,7 @@ struct soft_sign_deriv
     soft_sign_deriv()=default;
     __device__ float operator()(const float x) const
     {
-        float inner = __fadd_rz(1.f,fabsf(x));
+        float inner = __fadd_rz(1,fabsf(x));
         float in_sq = __fmul_rz(inner,inner);
         return __fdividef(sgn(x),in_sq);
     }
@@ -124,15 +136,33 @@ struct soft_sign_deriv
  * @note this is a 1D grid kernel
  */
 template <typename F>
-__global__ void activate(F const& func, float * input)
+__global__ void activate(
+                          F const& func, 
+                          float * input
+                        )
 {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     input[x]  = func(input[x]);
 }
 
+template <typename F>
+__global__ void activate(
+                          F const& func, 
+                          float * input, 
+                          float * output
+                        )
+{
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    output[x]  = func(input[x]);
+}
+
 /// TODO: Add documentation, this is ex-`sigmoid_prime`
 template <typename F>
-__global__ void derivatives(F const& func, float * sum_ji, float * output)
+__global__ void derivatives(
+                              F const& func, 
+                              float * sum_ji,
+                              float * output
+                           )
 {
     // Iterate Vector `Σ[ji]`
     int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -153,7 +183,7 @@ template <typename F>
 __global__ void delta_output (
                                 F const& deriv,
                                 float * sum,
-                                float * ideal,
+                                const float * ideal,
                                 float * actual,
                                 float * delta,
                                 unsigned int index
@@ -290,7 +320,7 @@ __global__ void back_prop (
 
 /// Calculate the Output Error: (Ideal[i] - Actual[i])^2
 __global__ void squared_error ( 
-                                float * ideal,
+                                const float * ideal,
                                 float * actual, 
                                 float * errors
                               );

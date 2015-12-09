@@ -1,26 +1,24 @@
-01.12.2015
+09.12.2015
 TODO:
 
-        BUG: tanh_scaled & tanh_scaled_derivative produce a 'nan' MSE - FIX THIS
+        1. Create a "Test" function which takes as argumnt a "*.test" file.
+           Run propagation for each input, collect sq_error and report back MSE.
 
-        0. ann::train should take learning and momemntum params.
-
-        1. Go through classes `trainer` and `trainer_data` there are a lot of TODO's.
-           There are still memory allocations which we can avoid.
-
-        2. Examine which kernels rely on previous values (theres only a few).
-           The shared data across `trainer_data` should be zero'ed-filled for those calls.
-
-        3. Create (de)serialisation for class ann: 
+        2. Create (de)serialisation for class ann: 
            Saving and Loading (Using BOOST) of a Trained network.
 
-        4. Implement Resilient-Back-Propagation
+        3. Implement Resilient-Back-Propagation
 
-        5. Examine and Experiment using other activation functors and their derivatives.
-           Create a more examples, using well know training data-sets.
+        4. Create a more examples, using data-sets: `diabetes`,`gene`,`mushroom`,`soybean`,`thyroid`
            It is important that I have a Deep Network working BEFORE the end of December!!!
 
-        6. It would be nice to be able to save on a file the actual recorded MSE's.
+        5. It would be nice to be able to save on a file the actual recorded MSE's.
 
-        7. I may need a "test" function which takes as an argument a "test.file"
-           and then runs propagations, finding what the MSE on unseens data actually is.
+        6. OPTIMIZE: the `trainer` class has serious problems: too many copies and allocations.
+                     What I need is a flat (and more elegant) way of fw_propagating, which is spamming `cudaMemcpy` and `cudaMemaloc`
+                     In order to do this, I need to rethink my `trainer::fw_propagate` seriously.
+
+        7. I should enforce `const corectness` in kernels whenever and wherever possible.
+
+NOTE: Profiling using nvprof was revealing: most time is spent allocating and copying memory.
+      This needs to be addressed and fixed.

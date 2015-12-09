@@ -50,12 +50,10 @@ set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};#-gencode arch=compute_20,code=sm_20
                                        -gencode arch=compute_30,code=sm_30;
                                        -std=c++11;
                                        -DVERBOSE;
-                                       #-DTHRUST_DEBUG;
                                        -DNDEBUG;
                                        -O3;
                                        -Xcompiler -fPIC;
                                        --use_fast_math;
-                                       #--relocatable-device-code=true 
                                        )
 
 
@@ -75,16 +73,31 @@ target_link_libraries(cuANN ${Boost_SYSTEM_LIBRARY} ${Boost_THREAD_LIBRARY} ${CM
 
 # Then we may build the samples
 
-# the XOR Sample
+# XOR with sigmoid bipolar
 cuda_compile(XOR_O ${SAMPLES}/xor.cu )
-cuda_add_executable(xor ${XOR_O})
-target_link_libraries(xor cuANN)
+cuda_add_executable(xor_sigmoid ${XOR_O})
+target_link_libraries(xor_sigmoid cuANN)
+
+# XOR with normal tanh
+cuda_compile(XOR_TANH_O ${SAMPLES}/xor_tanh.cu )
+cuda_add_executable(xor_tanh ${XOR_TANH_O})
+target_link_libraries(xor_tanh cuANN)
+
+# XOR with scaled tanh
+cuda_compile(XOR_TANH_SCALED_O ${SAMPLES}/xor_tanh_scaled.cu )
+cuda_add_executable(xor_tanh_scaled ${XOR_TANH_SCALED_O})
+target_link_libraries(xor_tanh_scaled cuANN)
 
 # Abelone Sample
 cuda_compile(ABEL_O ${SAMPLES}/abelone.cu)
 cuda_add_executable(abelone ${ABEL_O})
 target_link_libraries(abelone cuANN)
 
-# TODO: Add more Samples
+# Diabetes Sample
+cuda_compile(DIA_O ${SAMPLES}/diabetes.cu)
+cuda_add_executable(diabetes ${DIA_O})
+target_link_libraries(diabetes cuANN)
+
+# TODO: Add the rest of the samples: gene, mushroom, soybean, thyroid
 
 # and Finally, define the install location

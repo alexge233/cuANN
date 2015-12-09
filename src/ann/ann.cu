@@ -92,7 +92,6 @@ __host__ ann::ann (
     std::cout << "hidden neurons: " << hidden_neurons_ << " (per layer: " << per_layer_ << ")" << std::endl;
     std::cout << "output neurons: " << output_neurons << std::endl;
     std::cout << "weights: " << weights_.size() << std::endl;
-    std::cout << "learning rate: " << epsilon_ << " and momentum: " << alpha_ << std::endl;
 }
 
 __host__ void ann::print_weights() const

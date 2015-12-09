@@ -12,7 +12,7 @@ __host__ thrust::host_vector<float> ann::propagate (
 
     // Copy the input on the device memory - we will modify it
     thrust::device_vector<float> output = input;
-    float * output_ptr = thrust::raw_pointer_cast( output.data() );
+    float * output_ptr = thrust::raw_pointer_cast(output.data());
 
     // Input through activation function
     auto dimA = dim1D(output.size());
@@ -47,15 +47,22 @@ __host__ float ann::train (
                               unsigned int epochs,
                               unsigned int reports,
                               unsigned int max_threads,
-                              float stop_error
+                              float stop_error,
+                              float learning,
+                              float momentum
                           )
 {
     std::cout << "Epochs: " << epochs << " CPU Threads: " << max_threads << " Stop-Error: " << stop_error << std::endl;
+    std::cout << "Learning ε: " << learning << " Momentum α: " << momentum << std::endl;
+    alpha_ = momentum; 
+    epsilon_ = learning;
 
     // Weight gradients (Row-Major) - NOTE: those are Summed for each Pattern, during each Epoch 
     thrust::device_vector<float> gradients( weights_.size() );
+
     // The old (previous) Delta Updates `Δw(t-1)`
     thrust::device_vector<float> updates( weights_.size() );
+
     // Epoch Squared Errors (not Mean'ed yet)
     thrust::device_vector<float> sq_errors( train_data.size()*train_data.output_size() );
 
@@ -63,7 +70,7 @@ __host__ float ann::train (
     std::mutex gradient_mutex;
     
     // trainer data queue
-    std::vector< std::shared_ptr<trainer_data> > thread_data;
+    std::vector<std::shared_ptr<trainer_data>> thread_data;
     
     // Reserve same as MAX_THREADs else we will be doing many copies
     thread_data.reserve(max_threads);
@@ -71,8 +78,15 @@ __host__ float ann::train (
     // Allocate thread_data objects - NOTE: Each `trainer_data` must be unique and not shared!
     for (int i = 0; i < max_threads; i++)
     {
-        thread_data.push_back( std::make_shared<trainer_data>( weights_, gradients, sq_errors, w_index_, gradient_mutex,
-                                                               output_neurons_, input_neurons_, hidden_neurons_, per_layer_ ));
+        thread_data.push_back( std::make_shared<trainer_data>( weights_, 
+                                                               gradients, 
+                                                               sq_errors, 
+                                                               w_index_, 
+                                                               gradient_mutex,
+                                                               output_neurons_, 
+                                                               input_neurons_, 
+                                                               hidden_neurons_, 
+                                                               per_layer_ ));
     }
 
     // trainer thread pool - max threads and thread_data allocated on device memory
@@ -87,8 +101,10 @@ __host__ float ann::train (
     {
         // Run an epoch and get its MSE: activation func, derivative func, training data, thread pool, thread data
         mse = epoch(func,deriv,train_data,thread_pool,gradients,updates,sq_errors);
+
         // Shuffle training data
         train_data.shuffle();
+
         // Report if needed
         if ( k == reports && k != 0 )
         {
@@ -121,7 +137,13 @@ __host__ float ann::epoch (
     for (int i = 0; i< dataset.size(); i++)
     {
         // create a `trainer` thread object for the `tread_pool` && then submit it to the thread pool
-        auto obj = cuANN::trainer<A,D>(func,deriv,dataset[i].input,dataset[i].output,alpha_,epsilon_,i);
+        auto obj = cuANN::trainer<A,D>(func, 
+                                       deriv, 
+                                       //const_cast<const thrust::device_vector<float> &>( dataset[i].input ), 
+                                       //const_cast<const thrust::device_vector<float> &>( dataset[i].output ), 
+                                       dataset[i].input,
+                                       dataset[i].output,
+                                       i );
         thread_pool.submit<A,D>(obj);
     }
     // When all threads have finished, we can then update the weights and calculate the mean squared errors
@@ -134,7 +156,7 @@ __host__ float ann::epoch (
                                                          thrust::raw_pointer_cast(gradients.data()), 
                                                          thrust::raw_pointer_cast(updates.data()), 
                                                          alpha_, 
-                                                         epsilon_ );   
+                                                         epsilon_);
     // Sum squared errors
     float epoch_squared_errors = thrust::reduce(errors.begin(),errors.end());
     cudaDeviceSynchronize();

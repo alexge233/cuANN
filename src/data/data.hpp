@@ -6,6 +6,8 @@ namespace cuANN
 /// @brief An Input/Output Pattern pair
 struct row
 {
+    //thrust::device_vector<float> input;
+    //thrust::device_vector<float> output;
     thrust::host_vector<float> input;
     thrust::host_vector<float> output;
 

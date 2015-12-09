@@ -41,7 +41,9 @@ public:
                   unsigned int epochs,
                   unsigned int reports,
                   unsigned int max_threads,
-                  float stop_error
+                  float stop_error,
+                  float learning,
+                  float momentum
                 );
 
     /// @brief Propagate the input through the network, and get an output
@@ -94,8 +96,9 @@ protected:
     unsigned int output_neurons_;
     unsigned int hidden_layers_;
     unsigned int per_layer_;
-    float alpha_ = .9f;
-    float epsilon_ = .3f;
+    float alpha_;
+    float epsilon_;
+
     /// Weight matrix for all nodes
     thrust::device_vector<float> weights_;
     /// Index tracks of where Weights begin and end (per layer increments) for fully connected network

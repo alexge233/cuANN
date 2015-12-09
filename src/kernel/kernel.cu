@@ -132,7 +132,7 @@ __global__ void back_prop (
 }
 
 __global__ void squared_error ( 
-                                float * ideal,
+                                const float * ideal,
                                 float * actual, 
                                 float * errors
                             )
@@ -140,6 +140,7 @@ __global__ void squared_error (
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     float diff = ideal[x] - actual[x];
     errors[x] = __fmul_rz( diff, diff );
+    //printf("squared_error: %f, ideal: %f, actual: %f\n",errors[x],ideal[x],actual[x]);
 }
 
 };

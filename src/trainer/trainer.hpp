@@ -28,10 +28,10 @@ public:
     trainer (
                A const& func,
                D const& deriv,
+               //const thrust::device_vector<float> & input,
+               //const thrust::device_vector<float> & output,
                const thrust::host_vector<float> & input,
                const thrust::host_vector<float> & output,
-               float alpha,
-               float epsilon,
                unsigned int index
             );
 
@@ -71,14 +71,15 @@ private:
     // Activation and Derivative
     const A & _func;
     const D & _deriv;
-    // Learning and Momentum rates
-    const float _a;
-    const float _e;
+
     // Pattern index
     const unsigned int _i;
-    // Input and Output Patterns (host mem)
+
+    // Input and Output Patterns (device memory of cuANN::data::row)
+    //const thrust::device_vector<float> & ideal_input;
+    //const thrust::device_vector<float> & ideal_output;
     thrust::host_vector<float> _input;
-    thrust::host_vector<float> ideal_output;
+    thrust::host_vector<float> _output;
 };
 }
 #include "trainer.hxx"
