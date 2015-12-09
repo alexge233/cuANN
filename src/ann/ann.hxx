@@ -137,13 +137,7 @@ __host__ float ann::epoch (
     for (int i = 0; i< dataset.size(); i++)
     {
         // create a `trainer` thread object for the `tread_pool` && then submit it to the thread pool
-        auto obj = cuANN::trainer<A,D>(func, 
-                                       deriv, 
-                                       //const_cast<const thrust::device_vector<float> &>( dataset[i].input ), 
-                                       //const_cast<const thrust::device_vector<float> &>( dataset[i].output ), 
-                                       dataset[i].input,
-                                       dataset[i].output,
-                                       i );
+        auto obj = cuANN::trainer<A,D>(func, deriv, dataset[i], i );
         thread_pool.submit<A,D>(obj);
     }
     // When all threads have finished, we can then update the weights and calculate the mean squared errors

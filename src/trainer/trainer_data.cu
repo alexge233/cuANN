@@ -31,7 +31,6 @@ __host__ trainer_data::trainer_data (
     node_outputs = thrust::device_vector<float>(input_size+hidden_size+output_size);
     actual_output = thrust::device_vector<float>(output_size);
     gradients = thrust::device_vector<float>(weight_ref.size()); 
-    input = thrust::device_vector<float>(input_size);
 
     // Max size for Layer Sums and Tmp Layer Output
     unsigned int max_size = input_size > n_per_hl ? input_size : n_per_hl;

@@ -62,8 +62,6 @@ struct trainer_data
     thrust::device_vector<float> gradients;
     /// Actual Output
     thrust::device_vector<float> actual_output;
-    /// Input
-    thrust::device_vector<float> input;
 
     // Forward Propagation Matrix Result: `I[j] * W[ji]` - max size: `weights size`
     thrust::device_vector<float> fw_prop_mtx;

@@ -16,7 +16,7 @@ int main (void)
     cuANN::data train_data = cuANN::data("diabetes.train");
 
     // Train: Activation, Derivative, Data, Epochs, Reports, Threads, Stop Error
-    float mse = net.train(func,deriv,train_data,10000,100,8,0.002f,0.2f,0.9f);
+    float mse = net.train(func,deriv,train_data,10000,100,8,0.002f,0.7f,0.2f);
 
     // Print MSE
     std::cout << "diabetes Network using TANH trained MSE: " << mse << std::endl;

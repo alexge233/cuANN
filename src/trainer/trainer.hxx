@@ -5,14 +5,12 @@ template <class A,class D>
 trainer<A,D>::trainer (
                         A const& func,
                         D const& deriv,
-                        //const thrust::device_vector<float> & input,
-                        //const thrust::device_vector<float> & output,
-                        const thrust::host_vector<float> & input,
-                        const thrust::host_vector<float> & output,
+                        const cuANN::row & pattern,
                         unsigned int index
                       )
-// #!COPY Reference to Input and Output
-: _func(func), _deriv(deriv), _input(input),_output(output), _i(index)
+// #!COPY pattern.input and pattern.output.
+//        WARNING: if I use reference the ANN stops learning!
+: _func(func), _deriv(deriv), ideal_input(pattern.input),ideal_output(pattern.output), _i(index)
 {}
 
 template <class A,class D>
@@ -25,12 +23,16 @@ void trainer<A,D>::operator()( std::vector<std::shared_ptr<trainer_data>> & thre
     // Throw if we can't find available thread data - this should never happen if MAX_THREADS == THREAD_DATA
     if ( it == thread_data.end() ) throw std::runtime_error("no free trainer_data");
 
+    /*
+         AN interesting Idea would be to fill the GPU memory with trainer-data objects unique to a pattern.
+         This scheme, would require that for each pattern, I find the related trainer-data.
+         That way, I would use the maximum amount of memory, allocate it once, and avoid a lot of other
+         allocations and copying.
+    */
+
     // Set the trainer data pointer
     const std::shared_ptr<cuANN::trainer_data> & ptr = (*it);
     assert(ptr);
-
-    // #!COPY not needed - I already have a reference to the DEVICE INPUT ARRAY
-    thrust::copy(_input.begin(),_input.end(),ptr->input.begin());
 
     // Reset previous data 
     thrust::fill(thrust::device,ptr->gradients.begin(),ptr->gradients.end(),0.f);
@@ -59,19 +61,17 @@ void trainer<A,D>::operator()( std::vector<std::shared_ptr<trainer_data>> & thre
 template <class A,class D>
 void trainer<A,D>::fw_propagate(const std::shared_ptr<trainer_data> & ptr) 
 {
-    // #!COPY Input as tmp_output
-    //thrust::device_vector<float> tmp_output( ideal_input.begin(), ideal_input.end() );
-    thrust::device_vector<float> tmp_output( ptr->input.begin(), ptr->input.end() );
+    // #!COPY Input as tmp_output (DtoD)
+    thrust::device_vector<float> tmp_output(ideal_input.begin(),ideal_input.end());
 
     // input size = grid x
-    auto dim = dim1D(ptr->input.size());
+    auto dim = dim1D(ideal_input.size());
 
     // Activate and then copy the output to `node_outputs` for delta node calculations
     activate<A><<<dim.num_blocks_x,dim.block_threads_x>>>(_func,thrust::raw_pointer_cast(tmp_output.data()));
 
-    // #!COPY activated input as node_output (can move into the activation function)
+    // #!COPY activated input as node_output (can move into the activation function but can't avoid the copy)
     thrust::copy(tmp_output.begin(),tmp_output.end(),ptr->node_outputs.begin() );
-    cudaDeviceSynchronize();
 
     // `sum_idx` = node_sums index, `out_idx` = node_outputs index
     unsigned int sums_idx = 0;
@@ -84,7 +84,7 @@ void trainer<A,D>::fw_propagate(const std::shared_ptr<trainer_data> & ptr)
         unsigned int w_from = std::get<0>(ptr->weight_idx_ref[k]);
         unsigned int w_to = std::get<1>(ptr->weight_idx_ref[k]);
 
-        // Σ( O[j] * W[ji] ) 
+        // Σ( O[j] * W[ji] ) #!COPY: DtoD (can be avoided if the layer_product is flattened here)
         ptr->layer_sums = trainer<A,D>::layer_product(w_from,w_to,tmp_output,ptr);
         tmp_output = ptr->layer_sums;
 
@@ -94,7 +94,6 @@ void trainer<A,D>::fw_propagate(const std::shared_ptr<trainer_data> & ptr)
 
         // update sums index: sums_idx + layer_nodes
         sums_idx += tmp_output.size();
-        cudaDeviceSynchronize();
 
         // Activate Output O[i]: `σ(O[i])`
         auto dimA2 = dim1D(tmp_output.size());
@@ -106,11 +105,13 @@ void trainer<A,D>::fw_propagate(const std::shared_ptr<trainer_data> & ptr)
 
         // update out_idx = out_idx + layer_nodes
         out_idx += tmp_output.size();
-        cudaDeviceSynchronize();
     }
-    cudaDeviceSynchronize();
         
     // #!COPY moving from local array to the `traner_data` array! Why not use it right from the start then?
+    //        In fact, in order to avoid the (Re)allocation of tmp_out at every pattern,
+    //        can't I allocate a tmp buffer in `trainer_data` and use it there?
+    //        Problem is that tmp_output size CHANGES within the for-loop.
+    //        Hence I need a way to track the change in size.
     ptr->actual_output = tmp_output;
 }
 
@@ -131,7 +132,8 @@ thrust::device_vector<float> trainer<A,D>::layer_product (
     dim3 threadsPerBlock(dimA.block_threads_x,dimA.block_threads_y);
     dim3 numBlocks(dimA.num_blocks_x,dimA.num_blocks_y);
 
-    thrust::fill(thrust::device,ptr->fw_prop_mtx.begin(),ptr->fw_prop_mtx.end(),0.f);
+    // Is this needed?
+    //thrust::fill(thrust::device,ptr->fw_prop_mtx.begin(),ptr->fw_prop_mtx.end(),0.f);
 
     // `I[j] * W[ji]` : @params: weights, input, matrix output, matrix width
     forward_prop<<<numBlocks,threadsPerBlock>>>(thrust::raw_pointer_cast(ptr->weight_ref.data()) + weights_begin,
@@ -140,6 +142,7 @@ thrust::device_vector<float> trainer<A,D>::layer_product (
                                                 width);
 
     // #!ALLOCATE: `Σ(I[j]*W[i])` - we can use directly the `ptr->node_sums` if we know the correct index!
+    //                              Doing so we avoid "#of layers * #of patterns" allocations !
     thrust::device_vector<float> sums (width);
 
     // `Σ(I[j]*W[i])` :  @params: matrix output, node sums, matrix height, matrix width
@@ -148,6 +151,7 @@ thrust::device_vector<float> trainer<A,D>::layer_product (
                                                             thrust::raw_pointer_cast(sums.data()),
                                                             height,width);
     // #!COPY is returned by value !!!
+    //        This can most certainly be avoided by flattening the `fw_propagate` and moving this code here out!
     return sums;
 }
 
@@ -157,15 +161,12 @@ void trainer<A,D>::output_node_delta(const std::shared_ptr<trainer_data> & ptr)
     // index position of output layer node sums
     unsigned int size_o = ptr->node_sums.size() - ptr->output_size;
 
-    // #!COPY from host to device
-    thrust::device_vector<float> ideal(_output);
- 
     // Calculate the Delta nodes of the Output Layer: `-E * σ'(Σ(O[i])` - the values are now placed in `ptr->node_deltas`
     // Use template <D> for the derivative, and pass it too
     auto dim = dim1D(ptr->output_size);
     delta_output<D><<<dim.num_blocks_x,dim.block_threads_x>>>(_deriv,
                                                               thrust::raw_pointer_cast(ptr->node_sums.data()),
-                                                              thrust::raw_pointer_cast(ideal.data()),
+                                                              thrust::raw_pointer_cast(ideal_output.data()),
                                                               thrust::raw_pointer_cast(ptr->actual_output.data()),
                                                               thrust::raw_pointer_cast(ptr->node_deltas.data()),
                                                               size_o);
@@ -212,7 +213,8 @@ void trainer<A,D>::hidden_node_delta(const std::shared_ptr<trainer_data> & ptr)
         unsigned int w_size = w_ik_to - w_ik_from;
         unsigned int width = w_size / ptr->n_per_hl;
 
-        thrust::fill(thrust::device,ptr->node_delta_mtx.begin(),ptr->node_delta_mtx.end(),0.f);
+        // Is the fill needed ???
+        //thrust::fill(thrust::device,ptr->node_delta_mtx.begin(),ptr->node_delta_mtx.end(),0.f);
         float * mtx_ptr = thrust::raw_pointer_cast( ptr->node_delta_mtx.data() );
 
         // X grid = size_i (current layer node count), Y grid = size_k (next layer node count)
@@ -241,6 +243,7 @@ void trainer<A,D>::calc_weight_gradients(const std::shared_ptr<trainer_data> &pt
 {
     // Index of node delta per layer
     unsigned int delta_idx = 0;
+
     // Index of node outputs per layer
     unsigned int output_idx = 0;
 
@@ -295,11 +298,10 @@ void trainer<A,D>::calc_squared_errors(const std::shared_ptr<trainer_data> &ptr)
 
     // indexed by pattern index * output size
     unsigned index = _i * ptr->output_size; 
-    thrust::device_vector<float> ideal(_output);
 
     // Error = (Ideal - Actual)^2 for each Output node value 
     // We won't lock access to the epoch errors, because we **should not** access other items only this pattern's array range
-    squared_error<<<dim.num_blocks_x,dim.block_threads_x>>>( thrust::raw_pointer_cast(ideal.data()),
+    squared_error<<<dim.num_blocks_x,dim.block_threads_x>>>( thrust::raw_pointer_cast(ideal_output.data()),
                                                              thrust::raw_pointer_cast(ptr->actual_output.data()),
                                                              thrust::raw_pointer_cast(ptr->epoch_errors.data())+index);
 }

@@ -18,7 +18,11 @@ TODO:
                      What I need is a flat (and more elegant) way of fw_propagating, which is spamming `cudaMemcpy` and `cudaMemaloc`
                      In order to do this, I need to rethink my `trainer::fw_propagate` seriously.
 
-        7. I should enforce `const corectness` in kernels whenever and wherever possible.
+                     A CRAZY IDEA, would be to ALLOCATE before-hand ALL Pattern-trainer_data.
+                     In this case, I would allocate as many training patterns ONCE.
+                     Then for each Epoch Iteration, I would re-use the same Pattern-Trainer_Data.
+                     This will use ALOT of Memory, but will avoid constant re-allocations and copying.
+                     It may be feasible with normal training sets, but may become a problem with large ones.
 
 NOTE: Profiling using nvprof was revealing: most time is spent allocating and copying memory.
       This needs to be addressed and fixed.
