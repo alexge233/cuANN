@@ -12,6 +12,10 @@ class ann
 {
 public:
 
+    /// @brief Empty Constructor
+    /// @warning only to be used in order to de-serialize (load) an object from disk
+    ann () = default;
+
     /// @brief Construct a new ANN
     /// @param input_neurons must match your input data
     /// @param hidden_layers will be used to calculate hidden neurons per layer
@@ -24,7 +28,7 @@ public:
         );
 
     /// Print on stdout all weight values
-    void print_weights ( ) const;
+    void print_weights()const;
 
     /// @brief Train the Network using the training data
     /// @param func is the activation functor
@@ -33,6 +37,8 @@ public:
     /// @param stop_error will stop training if that MSE is achieved
     /// @param epochs denotes for how many epochs will the network be trained
     /// @param reports defines the interval of epochs used to report on MSE on screen (use 0 for no reports)
+    /// @param learning sets the Back-propagation Learning rate
+    /// @param momentum sets the Back-Propagation Momentum
     template <class A,class D>
     float train (
                   A const& func,
@@ -46,14 +52,25 @@ public:
                   float momentum
                 );
 
+    /// @brief Test the Network for Accuracy/Performance
+    /// @template class A is the activation functor
+    /// @param func is the activation functor instance
+    /// @param test_data is the test data-set which will be used to test the network
+    /// @return Mean-Square-Error
+    template <class A>
+    float test (
+                   A const& func,
+                   const cuANN::data & test_data
+               ) const;
+
     /// @brief Propagate the input through the network, and get an output
     /// @note template class A defines the activation function type
     /// @return The Output array `O[k]` from the Output layer and nodes.
     template <class A>
-    thrust::host_vector<float> propagate ( 
-                                            A const& func,
-                                            thrust::device_vector<float> & input 
-                                         ) const;
+    thrust::device_vector<float> propagate ( 
+                                              A const& func,
+                                              thrust::device_vector<float> & input 
+                                           ) const;
 protected:
 
     /// @brief This is a Back-Propagation Batch Training Epoch
@@ -91,17 +108,35 @@ protected:
                                               const thrust::device_vector<float> & input
                                             ) const;
 
+
+    friend class boost::serialization::access; 
+
+    /// Serialize method
+    template<class Archive> 
+    void save(Archive & ar, const unsigned int) const;
+
+    /// Deserialize method
+    template<class Archive>
+    void load(Archive & ar, const unsigned int);
+
+    /// Split load/save methods
+    BOOST_SERIALIZATION_SPLIT_MEMBER()
+    
+    /// Various Network Settings
     unsigned int input_neurons_;
     unsigned int hidden_neurons_;
     unsigned int output_neurons_;
     unsigned int hidden_layers_;
     unsigned int per_layer_;
+
+    /// Back-Prop Learning and Momentum
     float alpha_;
     float epsilon_;
 
     /// Weight matrix for all nodes
     thrust::device_vector<float> weights_;
-    /// Index tracks of where Weights begin and end (per layer increments) for fully connected network
+
+    /// Index tracks of where Weights begin and end (per layer increments)
     std::vector<std::pair<int,int>> w_index_;
 };
 }

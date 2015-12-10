@@ -1,28 +1,33 @@
-09.12.2015
-TODO:
+10.12.2015
+TODO: [Version 0.2]
 
-        1. Create a "Test" function which takes as argumnt a "*.test" file.
-           Run propagation for each input, collect sq_error and report back MSE.
+        NOW. Create more samplex using data-sets: `robot`, `soybean`, `thyroid`
 
-        2. Create (de)serialisation for class ann: 
-           Saving and Loading (Using BOOST) of a Trained network.
+        NEXT. Save on a file the actual recorded MSE's. Save on a local member variable, and save on file if needed.
 
-        3. Implement Resilient-Back-Propagation
 
-        4. Create a more examples, using data-sets: `diabetes`,`gene`,`mushroom`,`soybean`,`thyroid`
-           It is important that I have a Deep Network working BEFORE the end of December!!!
+TODO: [Version 0.3]
 
-        5. It would be nice to be able to save on a file the actual recorded MSE's.
+        1. Average Cross-Entropy Error.
 
-        6. OPTIMIZE: the `trainer` class has serious problems: too many copies and allocations.
+        2. Squared MSE.
+        
+        3. Implement Resilient-Back-Propagation.
+           Once complete, rename `train` to `train_backprop` and create a new `train_rprop` method.
+           Then, parametrise the `epoch` method to take as param either an ENUM, or a functor to the batch training method.
+
+        4. OPTIMIZE: the `trainer` class has serious problems: too many copies and allocations.
                      What I need is a flat (and more elegant) way of fw_propagating, which is spamming `cudaMemcpy` and `cudaMemaloc`
                      In order to do this, I need to rethink my `trainer::fw_propagate` seriously.
 
-                     A CRAZY IDEA, would be to ALLOCATE before-hand ALL Pattern-trainer_data.
-                     In this case, I would allocate as many training patterns ONCE.
-                     Then for each Epoch Iteration, I would re-use the same Pattern-Trainer_Data.
-                     This will use ALOT of Memory, but will avoid constant re-allocations and copying.
-                     It may be feasible with normal training sets, but may become a problem with large ones.
+         A CRAZY IDEA, would be to ALLOCATE before-hand ALL Pattern-trainer_data.
+         In this case, I would allocate as many training patterns ONCE.
+         Then for each Epoch Iteration, I would re-use the same Pattern-Trainer_Data.
+         This will use ALOT of Memory, but will avoid constant re-allocations and copying.
+         It may be feasible with normal training sets, but may become a problem with large ones.
+
+       5. Enable Output Regression (Soft-Max) to properly scale the output.
+
 
 NOTE: Profiling using nvprof was revealing: most time is spent allocating and copying memory.
       This needs to be addressed and fixed.

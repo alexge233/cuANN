@@ -13,6 +13,11 @@
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 
+#include <boost/serialization/list.hpp>
+#include <boost/serialization/split_member.hpp>
+#include <boost/serialization/utility.hpp>
+#include <boost/serialization/vector.hpp>
+
 #include "data/data.hpp"
 #include "dim_find/dim_find.hpp"
 #include "helpers/helpers.hpp"

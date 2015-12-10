@@ -35,7 +35,7 @@ set(BUILD_SHARED_LIBS ON)
 # packages
 find_package(CUDA 6.5 REQUIRED )
 find_package(Thrust 1.7.2 REQUIRED)
-find_package(Boost COMPONENTS system thread REQUIRED)
+find_package(Boost COMPONENTS system thread serialization REQUIRED)
 find_package(Threads REQUIRED)
 
 # What does this line do ?
@@ -43,15 +43,18 @@ find_package(Threads REQUIRED)
 
 # ?
 set(CUDA_SEPERABLE_COMPILATION OFF)
+set(Boost_DEBUG OFF)
+set(Boost_USE_STATIC_LIBS OFF)
+set(Boost_USE_MULTITHREADED ON)
 
 # nvcc flags & C++ Flags - NOTE Optimisation can go here
 set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};#-gencode arch=compute_20,code=sm_20
                                        #-gencode arch=compute_20,code=sm_21;
                                        -gencode arch=compute_30,code=sm_30;
                                        -std=c++11;
-                                       -DVERBOSE;
-                                       -DNDEBUG;
-                                       -O3;
+                                       #-DVERBOSE;
+                                       #-DNDEBUG;
+                                       #-O3;
                                        -Xcompiler -fPIC;
                                        --use_fast_math;
                                        )
@@ -69,7 +72,7 @@ cuda_add_library(cuANN
                 )
 
 # Link with Boost and pthreads - This must be TESTED
-target_link_libraries(cuANN ${Boost_SYSTEM_LIBRARY} ${Boost_THREAD_LIBRARY} ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(cuANN ${Boost_SYSTEM_LIBRARY} ${Boost_THREAD_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${Boost_SERIALIZATION_LIBRARY})
 
 # Then we may build the samples
 
@@ -88,6 +91,11 @@ cuda_compile(XOR_TANH_SCALED_O ${SAMPLES}/xor_tanh_scaled.cu )
 cuda_add_executable(xor_tanh_scaled ${XOR_TANH_SCALED_O})
 target_link_libraries(xor_tanh_scaled cuANN)
 
+# Load XOR tanh scaled from file
+cuda_compile(LOAD_XOR_O ${SAMPLES}/load_xor.cu )
+cuda_add_executable(load_xor_net ${LOAD_XOR_O})
+target_link_libraries(load_xor_net cuANN)
+
 # Abelone Sample
 cuda_compile(ABEL_O ${SAMPLES}/abelone.cu)
 cuda_add_executable(abelone ${ABEL_O})
@@ -98,6 +106,14 @@ cuda_compile(DIA_O ${SAMPLES}/diabetes.cu)
 cuda_add_executable(diabetes ${DIA_O})
 target_link_libraries(diabetes cuANN)
 
-# TODO: Add the rest of the samples: gene, mushroom, soybean, thyroid
+# Gene Sample
+cuda_compile(GENE_O ${SAMPLES}/gene.cu)
+cuda_add_executable(gene ${GENE_O})
+target_link_libraries(gene cuANN)
 
-# and Finally, define the install location
+# Mushroom Sample
+cuda_compile(MUSHROOM_O ${SAMPLES}/mushroom.cu)
+cuda_add_executable(mushroom ${GENE_O})
+target_link_libraries(mushroom cuANN)
+
+# TODO: define the install location

@@ -198,6 +198,9 @@ __global__ void delta_output (
     delta[x+index] = __fmul_rz( neg_error, primed );
 }
 
+
+
+
 ///
 /// CUDA kernels for Testing a network
 ///
@@ -231,6 +234,9 @@ __global__ void sum_columns (
                                 unsigned int height,
                                 unsigned int width
                             );
+
+
+
 
 ///
 /// CUDA kernels for Training a network

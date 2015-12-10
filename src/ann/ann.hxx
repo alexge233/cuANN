@@ -2,15 +2,15 @@ namespace cuANN
 {
 
 template <class A>
-__host__ thrust::host_vector<float> ann::propagate ( 
-                                                        A const& func,
-                                                        thrust::device_vector<float> & input 
-                                                   ) const
+thrust::device_vector<float> ann::propagate ( 
+                                                A const& func,
+                                                thrust::device_vector<float> & input 
+                                           ) const
 {
     if ( input.size() != input_neurons_ )
         throw std::runtime_error( "ann::propagate param input size doesn't match input layer size" );
 
-    // Copy the input on the device memory - we will modify it
+    // #!COPY: move from host to device memory - we will modify it
     thrust::device_vector<float> output = input;
     float * output_ptr = thrust::raw_pointer_cast(output.data());
 
@@ -40,7 +40,7 @@ __host__ thrust::host_vector<float> ann::propagate (
 }
 
 template <class A,class D> 
-__host__ float ann::train (
+float ann::train (
                               A const& func,
                               D const& deriv,
                               cuANN::data & train_data,
@@ -59,10 +59,8 @@ __host__ float ann::train (
 
     // Weight gradients (Row-Major) - NOTE: those are Summed for each Pattern, during each Epoch 
     thrust::device_vector<float> gradients( weights_.size() );
-
     // The old (previous) Delta Updates `Δw(t-1)`
     thrust::device_vector<float> updates( weights_.size() );
-
     // Epoch Squared Errors (not Mean'ed yet)
     thrust::device_vector<float> sq_errors( train_data.size()*train_data.output_size() );
 
@@ -102,6 +100,8 @@ __host__ float ann::train (
         // Run an epoch and get its MSE: activation func, derivative func, training data, thread pool, thread data
         mse = epoch(func,deriv,train_data,thread_pool,gradients,updates,sq_errors);
 
+        if (mse < stop_error) break;
+
         // Shuffle training data
         train_data.shuffle();
 
@@ -112,14 +112,46 @@ __host__ float ann::train (
             k = 0;
         }
         k++;
-        if (mse < stop_error) break;
     }
     thread_pool.stop();
     return mse;
 }
 
+template <class A>
+float ann::test (
+                    A const& func,
+                    const cuANN::data & test_data
+                 ) const
+{
+    // Epoch Squared Errors (not Mean'ed yet)
+    thrust::device_vector<float> sq_errors( test_data.size() * test_data.output_size() );
+
+    // Iterate testing set, propagating each input
+    for (unsigned int i = 0; i < test_data.size(); i++)
+    {
+        // #!COPY: `test_data.input` is a host_vector
+        thrust::device_vector<float> input(test_data[i].input);
+        
+        // #!COPY: `test_data.output` is a host vector - BUG: illegal access memory 
+        thrust::device_vector<float> ideal(test_data[i].output);
+
+        // #!COPY: implied copy by value from device to device
+        thrust::device_vector<float> output = propagate(func,input);
+
+        // Compute squared error
+        auto dim = dim1D(test_data.output_size());
+        squared_error<<<dim.num_blocks_x,dim.block_threads_x>>>(thrust::raw_pointer_cast(ideal.data()),
+                                                                thrust::raw_pointer_cast(output.data()),
+                                                                thrust::raw_pointer_cast(sq_errors.data())+(i*test_data.output_size())
+                                                               );
+    }
+    float sum_squared_errors = thrust::reduce(sq_errors.begin(),sq_errors.end());
+    cudaDeviceSynchronize();
+    return (sum_squared_errors/sq_errors.size());
+}
+
 template <class A,class D>
-__host__ float ann::epoch (
+float ann::epoch (
                               A const& func,
                               D const& deriv,
                               const cuANN::data & dataset,
@@ -154,7 +186,44 @@ __host__ float ann::epoch (
     // Sum squared errors
     float epoch_squared_errors = thrust::reduce(errors.begin(),errors.end());
     cudaDeviceSynchronize();
+
     // Return Mean-Squared Errors
     return (epoch_squared_errors / errors.size());
 }
+
+template<class Archive> 
+void ann::save(Archive & ar, const unsigned int version) const
+{
+    // Serialize `weights` which is a `thrust::device_vector<float>` by copying to an `std::vector` first
+    std::vector<float> tmp_weights;
+
+    // Copy one by one the weights from the device memory
+    for(int i = 0; i < weights_.size(); i++) tmp_weights.push_back(weights_[i]);
+    ar & tmp_weights;
+
+    ar & input_neurons_;
+    ar & hidden_neurons_;
+    ar & hidden_layers_;
+    ar & per_layer_;
+    ar & w_index_;
+}
+
+template<class Archive>
+void ann::load(Archive & ar, const unsigned int version)
+{
+    // Last part of the archive are our `std::vector<float>` weights
+    std::vector<float> tmp_weights;
+    ar & tmp_weights;
+
+    // Copy one by one the weights to the device memory
+    weights_ = thrust::device_vector<float>(tmp_weights.size());
+    for(int i = 0; i < tmp_weights.size(); i++) weights_[i] = tmp_weights[i];
+
+    ar & input_neurons_;
+    ar & hidden_neurons_;
+    ar & hidden_layers_;
+    ar & per_layer_;
+    ar & w_index_;
+}
+
 };

@@ -1,8 +1,6 @@
 #include "../src/ann/ann.hpp"
 #include "../src/kernel/kernel.hpp"
-
 #include <iostream>
-#include <thrust/version.h>
 
 int main (void)
 {
@@ -12,13 +10,15 @@ int main (void)
 
     // Create a XOR Network: 2 input, 4 hidden neurons, 1 hidden layer, 1 output neurons
     cuANN::ann xor_net = cuANN::ann(2,4,1,1);
-    //xor_net.print_weights();
 
     // load the training data & print it on screen
     cuANN::data train_data = cuANN::data("xor.data");
 
+    // print data on stdout
+    train_data.print();
+
     // Train: Activation, Derivative, Data, Epochs, Reports, Threads, Stop Error
-    float mse = xor_net.train(func,deriv,train_data,100000,1000,4,0.002f,0.2f,0.9f);
+    float mse = xor_net.train(func,deriv,train_data,100000,100,4,.002,.2,.9);
 
     std::cout << "XOR Network using sigmoid bipolar trained MSE: " << mse << std::endl;
 

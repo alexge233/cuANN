@@ -96,14 +96,19 @@ __host__ ann::ann (
 
 __host__ void ann::print_weights() const
 {
-    for ( int k = 0; k < w_index_.size(); k++)
+    if ( weights_.size() > 0 )
     {
-        auto from = std::get<0>(w_index_[k]);
-        auto to   = std::get<1>(w_index_[k]);
-        for ( int x = from; x < to; x++ )
-            std::cout << weights_[x] << " ";
-        std::cout << std::endl;
+        for ( int k = 0; k < w_index_.size(); k++)
+        {
+            auto from = std::get<0>(w_index_[k]);
+            auto to   = std::get<1>(w_index_[k]);
+            for ( int x = from; x < to; x++ )
+                std::cout << weights_[x] << " ";
+            std::cout << std::endl;
+        }
     }
+    else 
+        throw std::runtime_error("cannot print weights - they are null");
 }
  
 __host__ thrust::device_vector<float> ann::prop_layer ( 
@@ -143,4 +148,7 @@ __host__ thrust::device_vector<float> ann::prop_layer (
 
     return sums;
 }
+
+
+
 };
