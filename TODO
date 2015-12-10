@@ -3,8 +3,9 @@ TODO: [Version 0.2]
 
         NOW. Create more samplex using data-sets: `robot`, `soybean`, `thyroid`
 
-        NEXT. Save on a file the actual recorded MSE's. Save on a local member variable, and save on file if needed.
+        BUG: MSE Is NOT working properly: I get XOR networks with MSE: 0.00160733 which when tested are all over the place!!!
 
+        NEXT. Save on a file the actual recorded MSE's. Save on a local member variable, and save on file if needed.
 
 TODO: [Version 0.3]
 

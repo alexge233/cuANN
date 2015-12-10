@@ -44,7 +44,7 @@ int main (void)
     thrust::device_vector<float> in_vec1(x_in1,x_in1+2);
     auto output1 = net.propagate( func, in_vec1 );
     std::cout << "output: ";
-    for ( auto val : output1 ) std::cout << val << std::endl;
+    for ( auto val : output1 ) std::cout << val << " (expecting 1)" << std::endl;
 
     // Test with [0,1] should give us [1]
     std::cout << "Testing with [0,1] as input" << std::endl;
@@ -52,7 +52,7 @@ int main (void)
     thrust::device_vector<float> in_vec2(x_in2,x_in2+2);
     auto output2 = net.propagate( func, in_vec2 );
     std::cout << "output: ";
-    for ( auto val : output2 ) std::cout << val << std::endl;
+    for ( auto val : output2 ) std::cout << val << " (expecting 1)" << std::endl;
 
     // Test with [0,0] should give us [0]
     std::cout << "Testing with [0,0] as input" << std::endl;
@@ -60,7 +60,7 @@ int main (void)
     thrust::device_vector<float> in_vec3(x_in3,x_in3+2);
     auto output3 = net.propagate( func, in_vec3 );
     std::cout << "output: ";
-    for ( auto val : output3 ) std::cout << val << std::endl;
+    for ( auto val : output3 ) std::cout << val << " (expecting 0)" << std::endl;
 
     // Test with [1,1] should give us [0]
     std::cout << "Testing with [1,1] as input" << std::endl;
@@ -68,7 +68,7 @@ int main (void)
     thrust::device_vector<float> in_vec4(x_in4,x_in4+2);
     auto output4 = net.propagate( func, in_vec4 );
     std::cout << "output: ";
-    for ( auto val : output4 ) std::cout << val << std::endl;
+    for ( auto val : output4 ) std::cout << val << " (expecting 0)" << std::endl;
 
     cuANN::data test_data = cuANN::data("xor.data");
 

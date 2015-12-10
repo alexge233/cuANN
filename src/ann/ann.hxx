@@ -100,8 +100,6 @@ float ann::train (
         // Run an epoch and get its MSE: activation func, derivative func, training data, thread pool, thread data
         mse = epoch(func,deriv,train_data,thread_pool,gradients,updates,sq_errors);
 
-        if (mse < stop_error) break;
-
         // Shuffle training data
         train_data.shuffle();
 
@@ -112,6 +110,7 @@ float ann::train (
             k = 0;
         }
         k++;
+        if (mse < stop_error) break;
     }
     thread_pool.stop();
     return mse;
