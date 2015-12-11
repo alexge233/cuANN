@@ -113,7 +113,22 @@ target_link_libraries(gene cuANN)
 
 # Mushroom Sample
 cuda_compile(MUSHROOM_O ${SAMPLES}/mushroom.cu)
-cuda_add_executable(mushroom ${GENE_O})
+cuda_add_executable(mushroom ${MUSHROOM_O})
 target_link_libraries(mushroom cuANN)
+
+# Robot Sample
+cuda_compile(ROBOT_O ${SAMPLES}/robot.cu)
+cuda_add_executable(robot ${ROBOT_O})
+target_link_libraries(robot cuANN)
+
+# Soybean Sample
+cuda_compile(SOYBEAN_O ${SAMPLES}/soybean.cu)
+cuda_add_executable(soybean ${SOYBEAN_O})
+target_link_libraries(soybean cuANN)
+
+# Thyroid Sample
+cuda_compile(THYROID_O ${SAMPLES}/thyroid.cu)
+cuda_add_executable(thyroid ${THYROID_O})
+target_link_libraries(thyroid cuANN)
 
 # TODO: define the install location

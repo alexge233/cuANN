@@ -35,18 +35,18 @@ int main ()
     cuANN::ann net = cuANN::ann(10,30,3,1);
 
     // Train: Load from File
-    cuANN::data train_data = cuANN::data("abelone.train");
+    cuANN::data train_data = cuANN::data("../data/abelone.train");
 
     // When training pass as the first two params the activation functor and it's derivative.
     // Then the training data, the Epochs for which the network will be trained,
     // the amount of CPU threads (each CPU thread "learns" a pattern)
     // the stop-error, e.g., when should the network stop learning
     // the learning rate, and the momentum rate.
-    auto mse = net.train(func,deriv,train_data,50000,100,20,.02,.7,.1);
+    auto mse = net.train(func,deriv,train_data,50000,100,4,.02,.2,.5);
 
     std::cout << "Abelone deep network using soft_sign back-prop MSE: " << mse << std::endl;
 
-    cuANN::data test_data = cuANN::data("abelone.test");
+    cuANN::data test_data = cuANN::data("../data/abelone.test");
     mse = net.test(func,test_data);
     std::cout << "abelone network test MSE: " << mse << std::endl;
    

@@ -31,19 +31,19 @@ int main ()
     cuANN::ann net = cuANN::ann(125,4,1,2);
 
     // load the training data (384 samples)
-    cuANN::data train_data = cuANN::data("mushroom.train");
+    cuANN::data train_data = cuANN::data("../data/mushroom.train");
 
     // When training pass as the first two params the activation functor and it's derivative.
     // Then the training data, the Epochs for which the network will be trained,
     // the amount of CPU threads (each CPU thread "learns" a pattern)
     // the stop-error, e.g., when should the network stop learning
     // the learning rate, and the momentum rate.
-    float mse = net.train(func,deriv,train_data,100000,100,20,.002,.7,.1);
+    float mse = net.train(func,deriv,train_data,100000,100,4,.002,.2,.5);
 
     // Print back-prop MSE
     std::cout << "mushroom net using tanhh_norm back-prop MSE: " << mse << std::endl;
 
-    cuANN::data test_data = cuANN::data("mushroom.test");
+    cuANN::data test_data = cuANN::data("../data/mushroom.test");
     mse = net.test(func,test_data);
     std::cout << "mushroom network test MSE: " << mse << std::endl;
    

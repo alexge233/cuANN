@@ -171,7 +171,6 @@ __global__ void derivatives(
 
 /**
  * @brief Delta Error of output layer: `-E * σ'( Σ(W[i]*O[j]) )`
- * @param deriv is the activation function derivative
  * @param sum is array of previous layer output dot incoming weights: `Σ ( W[i] * O[j])`
  * @param ideal is array `ideal` output, e.g., the Target output
  * @param actual is array `actual` output
@@ -179,26 +178,13 @@ __global__ void derivatives(
  * @param index is (???) @see ann/ann.cu
  * @note all parameters (w_sum,out_err,delta) should be the same size
  */
-template <typename F>
 __global__ void delta_output (
-                                F const& deriv,
-                                float * sum,
+                                const float * primed_sum,
                                 const float * ideal,
-                                float * actual,
+                                const float * actual,
                                 float * delta,
                                 unsigned int index
-                             )
-{
-    // x is the output neuron/node count (e.g., length of actual & ideal)
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    // Calculate the Negative Error: -(Actual - Ideal)
-    float neg_error = __fmul_rz( -1.f, ( actual[x] - ideal[x]) );
-    float primed = deriv(sum[x+index]);
-    // -E * σ'(Σ(O[i])
-    delta[x+index] = __fmul_rz( neg_error, primed );
-}
-
-
+                             );
 
 
 ///

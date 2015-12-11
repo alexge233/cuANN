@@ -44,16 +44,31 @@ void trainer<A,D>::operator()( std::vector<std::shared_ptr<trainer_data>> & thre
 
     // #1 Forward-Propagate: activate input & output through layers
     fw_propagate(ptr);
-    // #2 Calculate output node delta
-    output_node_delta(ptr);
-    // #3 Calculate the Primed value of node input sums for all layers
+    
+    // #2 Calculate the Primed value of node input sums for all layers
     primed_sums(ptr);
+
+    // #3 Calculate output node delta
+    output_node_delta(ptr);
+
+    // NOTE: #2 and #3 can probably be combined in a single kernel: run all primes, and the
+    //       If our index is at the end (last layer) also do the delta output
+    // 
+    // However, the hidden node deltas require than we have first finished primes and output node deltas
+    // So, without CUDA Compute 3.5 this can't be done in a single kernel.
+
     // #4 Calculate hidden node deltas
     hidden_node_delta(ptr);
+
     // #5  Calculate the wieght gradients for the entire network
     calc_weight_gradients(ptr);
+
+    // #2 & 3, are forward iterations, #4 is reverse, and #5 is forward.
+    // Sadly those can't be combined using CUDA compute 3.5, I need a newer GPU and a radical change to the kernel code.
+
     // #6   (a) Calculate squared errors (for output pattern) and add them to the epoch errors
     calc_squared_errors(ptr);
+
     // Unlock the available tread_data object
     ptr->available.unlock();
 }
@@ -132,9 +147,6 @@ thrust::device_vector<float> trainer<A,D>::layer_product (
     dim3 threadsPerBlock(dimA.block_threads_x,dimA.block_threads_y);
     dim3 numBlocks(dimA.num_blocks_x,dimA.num_blocks_y);
 
-    // Is this needed?
-    //thrust::fill(thrust::device,ptr->fw_prop_mtx.begin(),ptr->fw_prop_mtx.end(),0.f);
-
     // `I[j] * W[ji]` : @params: weights, input, matrix output, matrix width
     forward_prop<<<numBlocks,threadsPerBlock>>>(thrust::raw_pointer_cast(ptr->weight_ref.data()) + weights_begin,
                                                 thrust::raw_pointer_cast(input.data()),
@@ -156,32 +168,30 @@ thrust::device_vector<float> trainer<A,D>::layer_product (
 }
 
 template <class A,class D>
-void trainer<A,D>::output_node_delta(const std::shared_ptr<trainer_data> & ptr)
-{
-    // index position of output layer node sums
-    unsigned int size_o = ptr->node_sums.size() - ptr->output_size;
-
-    // Calculate the Delta nodes of the Output Layer: `-E * σ'(Σ(O[i])` - the values are now placed in `ptr->node_deltas`
-    // Use template <D> for the derivative, and pass it too
-    auto dim = dim1D(ptr->output_size);
-    delta_output<D><<<dim.num_blocks_x,dim.block_threads_x>>>(_deriv,
-                                                              thrust::raw_pointer_cast(ptr->node_sums.data()),
-                                                              thrust::raw_pointer_cast(ideal_output.data()),
-                                                              thrust::raw_pointer_cast(ptr->actual_output.data()),
-                                                              thrust::raw_pointer_cast(ptr->node_deltas.data()),
-                                                              size_o);
-}
-
-template <class A,class D>
 void trainer<A,D>::primed_sums(const std::shared_ptr<trainer_data> & ptr)
 {
-    // Calculate the Primed Sum: `σ'(Σ[ji])` for all hidden layers
+    // Calculate the Primed Sum: `σ'(Σ[ji])` for all node Input Sums.
     auto dim = dim1D(ptr->node_sums.size());
 
     // Store the primed Sums in `ptr->primed_sums`
     derivatives<D><<<dim.num_blocks_x,dim.block_threads_x>>>(_deriv,
                                                              thrust::raw_pointer_cast(ptr->node_sums.data()),
                                                              thrust::raw_pointer_cast(ptr->primed_sums.data()));
+}
+
+template <class A,class D>
+void trainer<A,D>::output_node_delta(const std::shared_ptr<trainer_data> & ptr)
+{
+    // index position of output layer's primed sums
+    unsigned int size_o = ptr->primed_sums.size() - ptr->output_size;
+
+    // Calculate the Delta nodes of the Output Layer: `-E * σ'(Σ(O[i])` - the values are now placed in `ptr->node_deltas`
+    auto dim = dim1D(ptr->output_size);
+    delta_output<<<dim.num_blocks_x,dim.block_threads_x>>>(thrust::raw_pointer_cast(ptr->primed_sums.data()),
+                                                           thrust::raw_pointer_cast(ideal_output.data()),
+                                                           thrust::raw_pointer_cast(ptr->actual_output.data()),
+                                                           thrust::raw_pointer_cast(ptr->node_deltas.data()),
+                                                           size_o);
 }
 
 template <class A,class D>
@@ -213,9 +223,12 @@ void trainer<A,D>::hidden_node_delta(const std::shared_ptr<trainer_data> & ptr)
         unsigned int w_size = w_ik_to - w_ik_from;
         unsigned int width = w_size / ptr->n_per_hl;
 
-        // Is the fill needed ???
-        //thrust::fill(thrust::device,ptr->node_delta_mtx.begin(),ptr->node_delta_mtx.end(),0.f);
         float * mtx_ptr = thrust::raw_pointer_cast( ptr->node_delta_mtx.data() );
+
+        // NOTE: I can probably combine in a single kernel the following (3) three kernels,
+        //       IF I abandon the 2D grid of the delta_product.
+        //       Using a 1D grid for iteration of current layer nodes, means that it may be possible
+        //       To compute all three kernels in a single one, but there might be a performance hit?
 
         // X grid = size_i (current layer node count), Y grid = size_k (next layer node count)
         auto Dim2D = dim2D(size_i,size_k);
@@ -246,6 +259,13 @@ void trainer<A,D>::calc_weight_gradients(const std::shared_ptr<trainer_data> &pt
 
     // Index of node outputs per layer
     unsigned int output_idx = 0;
+
+    // NOTE: This loop could probably be moved into a single kernel
+    //       If I can pass to that kernel the actual weight index (as an array or arrays).
+    //       This would imply that instead of a 2D grid, I flatten it to a 1D grid, and iterate weights
+    //       Instead of Nodes & Weights ?
+    //       Alternatively, it may be possible to do as a 2D grid, If I can index weights, gradients and node deltas properly
+    //       However, the benefit would be small: I would just avoid a few kernel calls.
 
     // Compute for each node delta the partial derivative `∂E/∂W[ik]` = δ[k] * O[i]
     // Gradients are equal to weights, Each gradient is allocated to a Weight (W[ik])
@@ -283,7 +303,6 @@ void trainer<A,D>::calc_weight_gradients(const std::shared_ptr<trainer_data> &pt
 
     // Lock the gradient Sums Mutex - only one thread at a time may update it
     std::lock_guard<std::mutex> guard(ptr->grad_sums_mtx);
-    cudaDeviceSynchronize();
 
     // Sum the weight gradients (Batch Training): `Σ( ∂E/∂W[ik] )` - X: gradient index
     auto dim = dim1D(ptr->epoch_gradients.size());
@@ -296,8 +315,8 @@ void trainer<A,D>::calc_squared_errors(const std::shared_ptr<trainer_data> &ptr)
 {
     auto dim = dim1D(ptr->output_size);
 
-    // indexed by pattern index * output size
-    unsigned index = _i * ptr->output_size; 
+    // indexed by pattern index, up to index + output size
+    unsigned int index = _i*ptr->output_size;
 
     // Error = (Ideal - Actual)^2 for each Output node value 
     // We won't lock access to the epoch errors, because we **should not** access other items only this pattern's array range

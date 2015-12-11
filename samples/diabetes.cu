@@ -30,20 +30,20 @@ int main ()
     cuANN::ann net = cuANN::ann(8,8,1,2);
 
     // load the training data (384 samples)
-    cuANN::data train_data = cuANN::data("diabetes.train");
+    cuANN::data train_data = cuANN::data("../data/diabetes.train");
 
     // When training pass as the first two params the activation functor and it's derivative.
     // Then the training data, the Epochs for which the network will be trained,
     // the amount of CPU threads (each CPU thread "learns" a pattern)
     // the stop-error, e.g., when should the network stop learning
     // the learning rate, and the momentum rate.
-    float mse = net.train(func,deriv,train_data,100000,100,10,.002,.7,.2);
+    float mse = net.train(func,deriv,train_data,100000,100,4,.002,.2,.5);
 
     // Print MSE
     std::cout << "diabetes network using TANH trained MSE: " << mse << std::endl;
 
     // Test the Network with the "test" data-set
-    cuANN::data test_data = cuANN::data("diabetes.test");
+    cuANN::data test_data = cuANN::data("../data/diabetes.test");
     mse = net.test(func,test_data);
     std::cout << "diabetes network test MSE: " << mse << std::endl;
    

@@ -1,34 +1,28 @@
-10.12.2015
-TODO: [Version 0.2]
-
-        NOW. Create more samplex using data-sets: `robot`, `soybean`, `thyroid`
-
-        BUG: MSE Is NOT working properly: I get XOR networks with MSE: 0.00160733 which when tested are all over the place!!!
-
-        NEXT. Save on a file the actual recorded MSE's. Save on a local member variable, and save on file if needed.
+11.12.2015
 
 TODO: [Version 0.3]
 
-        1. Average Cross-Entropy Error.
-
-        2. Squared MSE.
+        1. Average Cross-Entropy Error. This may require changes to back_prop as the update rule slightly changes.
         
-        3. Implement Resilient-Back-Propagation.
+        2. Implement Resilient-Back-Propagation.
            Once complete, rename `train` to `train_backprop` and create a new `train_rprop` method.
            Then, parametrise the `epoch` method to take as param either an ENUM, or a functor to the batch training method.
 
-        4. OPTIMIZE: the `trainer` class has serious problems: too many copies and allocations.
+        3. OPTIMIZE: the `trainer` class has serious problems: too many copies and allocations.
                      What I need is a flat (and more elegant) way of fw_propagating, which is spamming `cudaMemcpy` and `cudaMemaloc`
                      In order to do this, I need to rethink my `trainer::fw_propagate` seriously.
 
          A CRAZY IDEA, would be to ALLOCATE before-hand ALL Pattern-trainer_data.
-         In this case, I would allocate as many training patterns ONCE.
-         Then for each Epoch Iteration, I would re-use the same Pattern-Trainer_Data.
-         This will use ALOT of Memory, but will avoid constant re-allocations and copying.
-         It may be feasible with normal training sets, but may become a problem with large ones.
+                     In this case, I would allocate as many training patterns ONCE.
+                     Then for each Epoch Iteration, I would re-use the same Pattern-Trainer_Data.
+                     This will use ALOT of Memory, but will avoid constant re-allocations and copying.
+                     It may be feasible with normal training sets, but may become a problem with large ones.
 
        5. Enable Output Regression (Soft-Max) to properly scale the output.
 
 
 NOTE: Profiling using nvprof was revealing: most time is spent allocating and copying memory.
       This needs to be addressed and fixed.
+
+NOTE: Running Version 0.2 using `diabetes` GPU usage is: 25%-30% and 307Mb/2Gb with Memory and PCIe usage 1~2%
+      Therefore, v 0.2 did not maximise GPU utilisation.

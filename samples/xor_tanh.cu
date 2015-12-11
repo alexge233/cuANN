@@ -76,7 +76,7 @@ int main (void)
     mse = net.test(func,test_data);
     std::cout << "XOR network test MSE: " << mse << std::endl;
 
-    // save data to archive   
+    // save data to binary archive   
     std::ofstream ofs("xor_tanh.bin");
     boost::archive::binary_oarchive oa(ofs);
     oa << net;

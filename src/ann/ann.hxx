@@ -136,17 +136,19 @@ float ann::test (
 
         // #!COPY: implied copy by value from device to device
         thrust::device_vector<float> output = propagate(func,input);
+        
+        // Error Index
+        unsigned int index = i * test_data.output_size();
 
         // Compute squared error
         auto dim = dim1D(test_data.output_size());
         squared_error<<<dim.num_blocks_x,dim.block_threads_x>>>(thrust::raw_pointer_cast(ideal.data()),
                                                                 thrust::raw_pointer_cast(output.data()),
-                                                                thrust::raw_pointer_cast(sq_errors.data())+(i*test_data.output_size())
-                                                               );
+                                                                thrust::raw_pointer_cast(sq_errors.data())+index);
     }
-    float sum_squared_errors = thrust::reduce(sq_errors.begin(),sq_errors.end());
-    cudaDeviceSynchronize();
-    return (sum_squared_errors/sq_errors.size());
+
+    float sum = thrust::reduce(sq_errors.begin(),sq_errors.end(), (float)0, thrust::plus<float>() );
+    return (sum / sq_errors.size() );
 }
 
 template <class A,class D>
@@ -173,7 +175,6 @@ float ann::epoch (
     }
     // When all threads have finished, we can then update the weights and calculate the mean squared errors
     thread_pool.wait();
-    cudaDeviceSynchronize();
 
     // Do back-prop here
     auto dim = dim1D( weights_.size() );
@@ -183,11 +184,10 @@ float ann::epoch (
                                                          alpha_, 
                                                          epsilon_);
     // Sum squared errors
-    float epoch_squared_errors = thrust::reduce(errors.begin(),errors.end());
-    cudaDeviceSynchronize();
+    float sum = thrust::reduce(errors.begin(), errors.end(), (float)0, thrust::plus<float>() );
 
     // Return Mean-Squared Errors
-    return (epoch_squared_errors / errors.size());
+    return (sum / errors.size() );
 }
 
 template<class Archive> 
