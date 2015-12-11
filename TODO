@@ -1,10 +1,8 @@
 11.12.2015
 
 TODO: [Version 0.3]
-
-        1. Average Cross-Entropy Error. This may require changes to back_prop as the update rule slightly changes.
         
-        2. Implement Resilient-Back-Propagation.
+        1. Implement Resilient-Back-Propagation.
            Once complete, rename `train` to `train_backprop` and create a new `train_rprop` method.
            Then, parametrise the `epoch` method to take as param either an ENUM, or a functor to the batch training method.
 
@@ -12,13 +10,15 @@ TODO: [Version 0.3]
                      What I need is a flat (and more elegant) way of fw_propagating, which is spamming `cudaMemcpy` and `cudaMemaloc`
                      In order to do this, I need to rethink my `trainer::fw_propagate` seriously.
 
-         A CRAZY IDEA, would be to ALLOCATE before-hand ALL Pattern-trainer_data.
+                     A CRAZY IDEA, would be to ALLOCATE before-hand ALL Pattern-trainer_data.
                      In this case, I would allocate as many training patterns ONCE.
                      Then for each Epoch Iteration, I would re-use the same Pattern-Trainer_Data.
                      This will use ALOT of Memory, but will avoid constant re-allocations and copying.
                      It may be feasible with normal training sets, but may become a problem with large ones.
 
-       5. Enable Output Regression (Soft-Max) to properly scale the output.
+        3. Average Cross-Entropy Error. This may require changes to back_prop as the update rule slightly changes.
+
+        4. Enable Output Regression (Soft-Max) to properly scale the output.
 
 
 NOTE: Profiling using nvprof was revealing: most time is spent allocating and copying memory.
