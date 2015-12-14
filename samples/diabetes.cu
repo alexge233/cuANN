@@ -36,7 +36,7 @@ int main ()
     // the amount of CPU threads (each CPU thread "learns" a pattern)
     // the stop-error, e.g., when should the network stop learning
     // the learning rate, and the momentum rate.
-    float mse = net.train(func,deriv,train_data,500000,100,1,.002,.7,.2);
+    float mse = net.train(func,deriv,train_data,500000,100,1,.002,.7,.3);
 
     // Print MSE
     std::cout << "diabetes network trained MSE: " << mse << std::endl;

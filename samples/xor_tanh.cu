@@ -32,10 +32,12 @@ int main (void)
     // the amount of CPU threads (each CPU thread "learns" a pattern)
     // the stop-error, e.g., when should the network stop learning
     // the learning rate, and the momentum rate.
-    float mse = net.train(func,deriv,train_data,30000,1000,1,.0001,.7,.1);
+    float mse = net.train(func,deriv,train_data,30000,1000,1,.0001,.7,.3);
     cudaDeviceSynchronize();
+    std::cout << "XOR network using tanh_norm back-prop MSE: " << std::fixed << mse << std::endl;
 
-    std::cout << "XOR network using tanh_norm back-prop MSE: " << mse << std::endl;
+    // Let's cross-reference the MSE we acquired during back-prop training, with a test
+    std::cout << "XOR network test MSE: " << net.test(func,train_data) << std::endl;
 
     // Lets do some manual Propagations and see what the Network Output is
     //
@@ -45,7 +47,7 @@ int main (void)
     auto output1 = net.propagate( func, in_vec1 );
     cudaDeviceSynchronize();
     std::cout << "output: ";
-    for ( auto val : output1 ) std::cout << val << " (expecting 1)" << std::endl;
+    for ( auto val : output1 ) std::cout << std::fixed << val << " (expecting 1)" << std::endl;
 
     std::cout << "test [0,1] as input; ";
     float x_in2[2] {0,1};
@@ -53,7 +55,7 @@ int main (void)
     auto output2 = net.propagate( func, in_vec2 );
     cudaDeviceSynchronize();
     std::cout << "output: ";
-    for ( auto val : output2 ) std::cout << val << " (expecting 1)" << std::endl;
+    for ( auto val : output2 ) std::cout << std::fixed << val << " (expecting 1)" << std::endl;
 
     std::cout << "test [0,0] as input; ";
     float x_in3[2] {0,0};
@@ -61,7 +63,7 @@ int main (void)
     auto output3 = net.propagate( func, in_vec3 );
     cudaDeviceSynchronize();
     std::cout << "output: ";
-    for ( auto val : output3 ) std::cout << val << " (expecting 0)" << std::endl;
+    for ( auto val : output3 ) std::cout << std::fixed << val << " (expecting 0)" << std::endl;
 
     std::cout << "test [1,1] as input; ";
     float x_in4[2] {1,1};
@@ -69,10 +71,7 @@ int main (void)
     auto output4 = net.propagate( func, in_vec4 );
     cudaDeviceSynchronize();
     std::cout << "output: ";
-    for ( auto val : output4 ) std::cout << val << " (expecting 0)" << std::endl;
-
-    // Let's cross-reference the MSE we acquired during back-prop training, with a test
-    std::cout << "XOR network test MSE: " << net.test(func,train_data) << std::endl;
+    for ( auto val : output4 ) std::cout << std::fixed << val << " (expecting 0)" << std::endl;
 
     // save data to binary archive   
     std::ofstream ofs("xor_tanh.bin");
