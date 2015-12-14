@@ -8,8 +8,8 @@ int main ()
 {
     // Instantiate the activation functor and its derivative
     // For this Network we will use the Hyperbolic Tangent scaled between [-1,1] (see `src/kernel/kernel.hpp`)
-    cuANN::tanh_scaled func;
-    cuANN::tanh_scaled_deriv deriv;
+    cuANN::tanh_norm func;
+    cuANN::tanh_norm_deriv deriv;
 
     // Create the Neural Network
     // It must match the input size of the training data (see `data/diabetes.train`) and the output size.
@@ -37,7 +37,7 @@ int main ()
     // the amount of CPU threads (each CPU thread "learns" a pattern)
     // the stop-error, e.g., when should the network stop learning
     // the learning rate, and the momentum rate.
-    float mse = net.train(func,deriv,train_data,100000,100,4,.002,.2,.5);
+    float mse = net.train(func,deriv,train_data,100000,100,1,.002,.7,.1);
 
     // Print MSE
     std::cout << "diabetes network using TANH trained MSE: " << mse << std::endl;

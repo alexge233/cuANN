@@ -89,7 +89,7 @@ protected:
     float epoch (
                     A const& func,
                     D const& deriv,
-                    const cuANN::data & dataset,
+                    const unsigned int datasize,
                     cuANN::trainer_pool & thread_pool,
                     thrust::device_vector<float> & gradients,
                     thrust::device_vector<float> & updates,
@@ -135,7 +135,6 @@ protected:
 
     /// Weight matrix for all nodes
     thrust::device_vector<float> weights_;
-
     /// Index tracks of where Weights begin and end (per layer increments)
     std::vector<std::pair<int,int>> w_index_;
 };

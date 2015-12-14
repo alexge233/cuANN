@@ -42,7 +42,7 @@ int main ()
     // the amount of CPU threads (each CPU thread "learns" a pattern)
     // the stop-error, e.g., when should the network stop learning
     // the learning rate, and the momentum rate.
-    auto mse = net.train(func,deriv,train_data,50000,100,4,.02,.2,.5);
+    auto mse = net.train(func,deriv,train_data,50000,100,20,.002,.2,.7);
 
     std::cout << "Abelone deep network using soft_sign back-prop MSE: " << mse << std::endl;
 

@@ -1,29 +1,37 @@
-#ifndef _cuANN_trainer_data_HPP_
-#define _cuANN_trainer_data_HPP_
+#ifndef _cuANN_pattern_HPP_
+#define _cuANN_pattern_HPP_
 #include "includes.ihh"
 namespace cuANN
 {
 /// @author Alexander Giokas <a.gkiokas@warwick.ac.uk>
-/// @date   November 2015
+/// @date   December 2015
 /// @version 1
 /// @brief The data needed by a worker object.
-/// @note global squared errors are indexed by `input pattern` * `output size`
-///       As such, we don't need to lock access, as each `trainer` is unique per `input pattern`
 ///
-struct trainer_data
+struct pattern
 {
     /// 
-    trainer_data ( 
-                    const thrust::device_vector<float> & weights,
-                    thrust::device_vector<float> & gradient_sums,
-                    thrust::device_vector<float> & global_errors,
-                    const std::vector<std::pair<int,int>> & weight_index,
-                    std::mutex & gradient_mutex,
-                    unsigned int size_output,
-                    unsigned int size_input,
-                    unsigned int size_hidden,
-                    unsigned int nodes_per_hidden_layer
-                 );
+    pattern ( 
+                thrust::host_vector<float> input,
+                thrust::host_vector<float> output,
+                const thrust::device_vector<float> & weights,
+                thrust::device_vector<float> & gradient_sums,
+                thrust::device_vector<float> & global_errors,
+                const std::vector<std::pair<int,int>> & weight_index,
+                std::mutex & rw_mutex,
+                unsigned int size_output,
+                unsigned int size_input,
+                unsigned int size_hidden,
+                unsigned int nodes_per_hidden_layer,
+                unsigned int pattern_index
+             );
+
+    /// Zero-Fill local arrays
+    void zero_fill();
+
+
+    /// Pattern Index
+    const unsigned int index;
 
     /// Shared Weights
     const thrust::device_vector<float> & weight_ref;
@@ -34,10 +42,8 @@ struct trainer_data
     /// Reference to Shared Weight Index
     const std::vector<std::pair<int,int>> & weight_idx_ref;
 
-    /// Mutex for Read-Write gradient values
-    std::mutex & grad_sums_mtx;
-    /// Mutex for worker_data
-    std::mutex available;
+    /// Mutex for Updating global gradient values
+    std::mutex & update_mtx;
 
     /// Amount of Delta Nodes
     const unsigned int delta_size;
@@ -50,6 +56,12 @@ struct trainer_data
     /// Hidden Nodes per Hidden Layer
     const unsigned int n_per_hl;
 
+
+    /// Ideal Input
+    thrust::device_vector<float> ideal_input;
+    /// Ideal Outpput
+    thrust::device_vector<float> ideal_output;
+
     /// Node Sums Input `Σ( O[j] ) - The input to a node from all connecting nodes
     thrust::device_vector<float> node_sums;
     /// Node Deltas `δ[i]` - For all nodes
@@ -60,11 +72,6 @@ struct trainer_data
     thrust::device_vector<float> node_outputs;
     /// Weight Gradients `∂E/∂W[ik]`
     thrust::device_vector<float> gradients;
-    /// Squared Errors `(Ideal - Actual)^2`
-    thrust::device_vector<float> squared_errors;
-
-    /// Actual Output - NOTE: this is not needed
-    thrust::device_vector<float> actual_output;
 
     // Forward Propagation Matrix Result: `I[j] * W[ji]` - max size: `weights size`
     thrust::device_vector<float> fw_prop_mtx;
@@ -72,6 +79,19 @@ struct trainer_data
     thrust::device_vector<float> layer_sums;
     // Hidden Node Delta Matrix Result: `W[ik]*δ[k]` - max size: `weights size`
     thrust::device_vector<float> node_delta_mtx;
+};
+}
+
+/// hashing functor for a shared pointer to a pattern - based upon pattern's index
+namespace std 
+{
+template<> struct hash<cuANN::pattern>
+{
+    size_t operator()(const std::shared_ptr<cuANN::pattern> & ptr) const
+    {
+        assert(ptr);
+        return boost::hash_value(ptr->index);
+    }
 };
 }
 #endif

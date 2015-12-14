@@ -7,10 +7,10 @@
 int main ()
 {
     // Instantiate the activation functor and its derivative
-    // Because the `gene.train` data is binary (categorial) we use a sigmoid_bipolar activation
+    // Because the `gene.train` data is binary (categorial) we use tanh activation
     // and it's derivative
-    cuANN::sigmoid_bipolar func;
-    cuANN::sigmoid_bipolar_deriv deriv;
+    cuANN::tanh_norm func;
+    cuANN::tanh_norm_deriv deriv;
 
     // Create the Neural Network
     // It must match the input size of your data (in this case, have a look at `data/gene.train`
@@ -38,7 +38,7 @@ int main ()
     // the amount of CPU threads (each CPU thread "learns" a pattern)
     // the stop-error, e.g., when should the network stop learning
     // the learning rate, and the momentum rate.
-    float mse = net.train(func,deriv,train_data,100000,100,4,.002,.2,.5);
+    float mse = net.train(func,deriv,train_data,100000,100,4,.002,.2,.9);
 
     // Print back-prop MSE
     std::cout << "gene net using sigmoid_bipolar back-prop MSE: " << mse << std::endl;

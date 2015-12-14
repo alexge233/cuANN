@@ -31,11 +31,14 @@ __host__ trainer_data::trainer_data (
     node_outputs = thrust::device_vector<float>(input_size+hidden_size+output_size);
     actual_output = thrust::device_vector<float>(output_size);
     gradients = thrust::device_vector<float>(weight_ref.size()); 
+    squared_errors = thrust::device_vector<float>(output_size);
 
     // Max size for Layer Sums and Tmp Layer Output
     unsigned int max_size = input_size > n_per_hl ? input_size : n_per_hl;
 
     fw_prop_mtx = thrust::device_vector<float>(weight_ref.size());
+
+    // NOTE: this is a copy of node_sums, no need to use can deprecate
     layer_sums = thrust::device_vector<float>(max_size);
     node_delta_mtx = thrust::device_vector<float>(weight_ref.size());
 }

@@ -39,7 +39,7 @@ int main ()
     // the amount of CPU threads (each CPU thread "learns" a pattern)
     // the stop-error, e.g., when should the network stop learning
     // the learning rate, and the momentum rate.
-    float mse = net.train(func,deriv,train_data,100000,100,4,.002,.2,.5);
+    float mse = net.train(func,deriv,train_data,100000,100,4,.002,.2,.7);
 
     // Print back-prop MSE
     std::cout << "robot net using tanhh_norm back-prop MSE: " << mse << std::endl;

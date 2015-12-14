@@ -18,12 +18,12 @@ Next version (0.3) will hopefully be better optimised.
 
 ### Building
 In order to build:
-
+```
     mkdir build
     cd build
     cmake ..
     make -j8
-
+```
 The dependencies are:
 
 ```
@@ -48,3 +48,7 @@ Newer versions and GPUs should work fine, however I can't guarantee it will work
 
 ### NOTE: Neural Networks using *Back-Propagation* are bizzare machines: they may fail to learn, or may take too long to learn.
 This greatly depends on the network architecture (input nodes, hidden nodes, hidden layers, etc) as well as the learning rate *epsilon* and the momentum *alpha*.
+
+### THANKS:
+Many thanks to `comp.ai.neural-nets` on Google groups: https://groups.google.com/forum/#!forum/comp.ai.neural-nets
+Also, many thanks to anyone who helped on http://www.stackoverflow.com

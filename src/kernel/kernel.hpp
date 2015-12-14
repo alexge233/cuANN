@@ -16,8 +16,7 @@ struct sigmoid
     sigmoid()=default;
     __device__ float operator()(const float x) const
     {
-        float denom = __fadd_rz(1.f,__expf(-x));
-        return __fdividef(1.f,denom);
+        return 1 / ( 1 + expf(-x) );
     }
 };
 
@@ -27,9 +26,8 @@ struct sigmoid_deriv
     sigmoid_deriv()=default;
     __device__ float operator()(const float x) const
     {
-        float denom = __fadd_rz(1.f,__expf(-x));
-        float sig= __fdividef(1.f,denom);
-        return __fmul_rz(sig,(1.f-sig));
+        float sig = 1 / ( 1 + expf(-x) );
+        return sig * ( 1 - sig );
     }
 };
 
@@ -38,8 +36,7 @@ struct sigmoid_bipolar
 {
     __device__ float operator()(const float x) const
     {
-        float denom = __fadd_rz(1.f,__expf(-x));
-        return __fdividef(1,denom);
+        return 1 / (1 + expf(-x));
     }
 };
 
@@ -49,12 +46,9 @@ struct sigmoid_bipolar_deriv
     sigmoid_bipolar_deriv()=default;
     __device__ float operator()(const float x) const
     {
-        float denom = __fadd_rz(1,__expf(-x));
-        float sig= __fdividef(1,denom);
-        float rhs = 1-sig;
-        float lhs = __fadd_rz(1,sig);
-        float inner= __fmul_rz(lhs,rhs);
-        return __fmul_rz(0.5,inner);
+        float sig   = 1 / (1 + expf(-x));
+        float inner = (1 + sig) * (1 - sig);
+        return 0.5 * inner;
     }
 };
 
@@ -75,7 +69,7 @@ struct tanh_norm_deriv
     __device__ float operator()(const float x) const
     {
         float cosh_x = coshf(x);
-        return __fdividef(1,__fmul_rz(cosh_x,cosh_x));
+        return 1/(cosh_x*cosh_x);
     }
 };
 
@@ -86,9 +80,7 @@ struct tanh_scaled
     tanh_scaled()=default;
     __device__ float operator()(const float x) const
     {
-        float value = __fmul_rz(0.666666667,x);
-        float tanh_vl=  tanhf(value);
-        return __fmul_rz(1.7159,tanh_vl);
+        return 1.7159 * tanhf(0.666666667 * x);
     }
 };
 
@@ -99,9 +91,8 @@ struct tanh_scaled_deriv
     tanh_scaled_deriv()=default;
     __device__ float operator()(const float x) const
     {
-        float tanh_vl = tanhf(__fmul_rz(0.666666667,x));
-        float dot = __fmul_rz((1.7159-tanh_vl),__fadd_rz(1.7159,tanh_vl));
-        return __fmul_rz(0.38852303,dot);
+        float tanh_vl = tanhf(0.666666667 * x);
+        return 0.38852303 * ((1.7159 - tanh_vl) * (1.7159 + tanh_vl));
     }
 };
 
@@ -111,8 +102,7 @@ struct soft_sign
     soft_sign()=default;
     __device__ float operator()(const float x) const
     {
-        float denom = __fadd_rz(1,fabsf(x));
-        return __fdividef(x,denom);
+        return x / (1 + fabsf(x));
     }
 };
 
@@ -122,9 +112,8 @@ struct soft_sign_deriv
     soft_sign_deriv()=default;
     __device__ float operator()(const float x) const
     {
-        float inner = __fadd_rz(1,fabsf(x));
-        float in_sq = __fmul_rz(inner,inner);
-        return __fdividef(sgn(x),in_sq);
+        float inner = 1 + fabsf(x);
+        return sgn(x) / (inner * inner);
     }
 };
 
@@ -153,7 +142,8 @@ __global__ void activate(
                         )
 {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
-    output[x]  = func(input[x]);
+    output[x] = func(input[x]);
+    //printf("activate: %f output: %f\n",input[x],output[x]);
 }
 
 /// TODO: Add documentation, this is ex-`sigmoid_prime`
@@ -310,12 +300,11 @@ __global__ void back_prop (
 
 // TODO: Resilient Back-Prop
 
-/// Calculate the Output Error: (Ideal[i] - Actual[i])^2
+/// Calculate the Output Error: (Ideal[i] - Actual[i])²
 __global__ void squared_error ( 
                                 const float * ideal,
-                                float * actual, 
+                                const float * actual, 
                                 float * errors
                               );
-
 };
 #endif

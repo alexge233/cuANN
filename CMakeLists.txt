@@ -56,7 +56,7 @@ set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};#-gencode arch=compute_20,code=sm_20
                                        -DNDEBUG;
                                        -O3;
                                        -Xcompiler -fPIC;
-                                       --use_fast_math;
+                                       #--use_fast_math; // WARNING intrinsic maths are tricky!
                                        )
 
 
@@ -68,7 +68,7 @@ cuda_add_library(cuANN
                 ${SRC}/ann/ann.cu
                 ${SRC}/data/data.cu
                 ${SRC}/kernel/kernel.cu
-                ${SRC}/trainer/trainer_data.cu
+                ${SRC}/pattern/pattern.cu
                 )
 
 # Link with Boost and pthreads - This must be TESTED
@@ -91,7 +91,7 @@ cuda_compile(XOR_TANH_SCALED_O ${SAMPLES}/xor_tanh_scaled.cu )
 cuda_add_executable(xor_tanh_scaled ${XOR_TANH_SCALED_O})
 target_link_libraries(xor_tanh_scaled cuANN)
 
-# Load XOR tanh scaled from file
+# Load XOR network
 cuda_compile(LOAD_XOR_O ${SAMPLES}/load_xor.cu )
 cuda_add_executable(load_xor_net ${LOAD_XOR_O})
 target_link_libraries(load_xor_net cuANN)

@@ -15,9 +15,9 @@ public:
     /// Construct for @param max_threads
     trainer_pool ( 
                     unsigned int max_threads,
-                    std::vector<std::shared_ptr<trainer_data>> & thread_data
+                    std::vector<std::shared_ptr<pattern>> & patterns
                  )
-    : _max_threads_(max_threads), _work(_io_service), _thread_data(thread_data)
+    : _max_threads_(max_threads), _work(_io_service), _pattern_data(patterns)
     {}
 
     /// Start processing threads
@@ -74,7 +74,7 @@ public:
         lock.unlock();
         _io_service.post([this,job] () mutable
                          {
-                             job(_thread_data);
+                             job(_pattern_data);
                              reduce();
                          });
     }
@@ -85,7 +85,7 @@ private:
     boost::asio::io_service _io_service;
     boost::asio::io_service::work _work;
     std::vector<std::thread> _threads;
-    std::vector<std::shared_ptr<trainer_data>> & _thread_data;
+    std::vector<std::shared_ptr<pattern>> & _pattern_data;
     std::condition_variable _cv;
     std::mutex _cvm;
     size_t _tasks = 0;

@@ -30,7 +30,7 @@ int main ()
     // REMEMBER: There is no guarantee that the network will learn - it depends on weight initialisation
     //           and the training algorithm, as well as the "representative power" of the training data.
     //
-    cuANN::ann net = cuANN::ann(82,0,0,19);
+    cuANN::ann net = cuANN::ann(21,18,2,3);
 
     // load the training data (3600 samples)
     cuANN::data train_data = cuANN::data("../data/thyroid.train");
@@ -40,7 +40,7 @@ int main ()
     // the amount of CPU threads (each CPU thread "learns" a pattern)
     // the stop-error, e.g., when should the network stop learning
     // the learning rate, and the momentum rate.
-    float mse = net.train(func,deriv,train_data,100000,100,4,.002,.2,.7);
+    float mse = net.train(func,deriv,train_data,100000,100,4,.002,.2,.9);
 
     // Print back-prop MSE
     std::cout << "thyroid net using tanhh_norm back-prop MSE: " << mse << std::endl;
