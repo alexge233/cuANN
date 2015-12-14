@@ -34,6 +34,9 @@ public:
     
 private:
 
+    // `σ'(Σ(I[j]*W[i]))` 
+    void fw_propagate(const std::shared_ptr<pattern> & ptr);
+
     // Calculate Output Node Delta: `-E * σ'(Σ(O[i])`
     void output_node_delta(const std::shared_ptr<pattern> & ptr);
 

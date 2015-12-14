@@ -90,7 +90,8 @@ protected:
                     A const& func,
                     D const& deriv,
                     const unsigned int datasize,
-                    cuANN::trainer_pool & thread_pool,
+                    //cuANN::trainer_pool & thread_pool,
+                    std::vector<std::shared_ptr<pattern>> & patterns,
                     thrust::device_vector<float> & gradients,
                     thrust::device_vector<float> & updates,
                     thrust::device_vector<float> & errors

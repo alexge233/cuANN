@@ -23,5 +23,4 @@
 #include "helpers/helpers.hpp"
 #include "kernel/kernel.hpp"
 #include "trainer/trainer.hpp"
-#include "trainer/trainer_pool.hpp"
 #include "pattern/pattern.hpp"

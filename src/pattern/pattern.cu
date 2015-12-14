@@ -9,7 +9,6 @@ __host__ pattern::pattern (
                             thrust::device_vector<float> & gradient_sums,
                             thrust::device_vector<float> & global_errors,
                             const std::vector<std::pair<int,int>> & weight_index,
-                            std::mutex & rw_mutex,
                             unsigned int size_output,
                             unsigned int size_input,
                             unsigned int size_hidden,
@@ -20,7 +19,6 @@ __host__ pattern::pattern (
   epoch_gradients(gradient_sums),
   epoch_errors(global_errors),
   weight_idx_ref(weight_index),
-  update_mtx(rw_mutex),
   // delta size = hidden nodes + output nodes
   delta_size(size_hidden+size_output),
   output_size(size_output),

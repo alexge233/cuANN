@@ -60,7 +60,7 @@ __global__ void delta_product (
     // Y is layer[k] nodes (size_k) == d_k == w_per_n
     int y = blockIdx.y * blockDim.y + threadIdx.y;
     //  W[ik] * δ[k] - Row-Major Matrix
-    output[width*x+y] = d_k[y] * w_ik[width*x+y];
+    output[width*x+y] = w_ik[width*x+y] * d_k[y];
 }
 
 __global__ void delta_sum_rows (

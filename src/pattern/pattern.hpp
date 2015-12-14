@@ -18,7 +18,6 @@ struct pattern
                 thrust::device_vector<float> & gradient_sums,
                 thrust::device_vector<float> & global_errors,
                 const std::vector<std::pair<int,int>> & weight_index,
-                std::mutex & rw_mutex,
                 unsigned int size_output,
                 unsigned int size_input,
                 unsigned int size_hidden,
@@ -41,9 +40,6 @@ struct pattern
     thrust::device_vector<float> & epoch_errors;
     /// Reference to Shared Weight Index
     const std::vector<std::pair<int,int>> & weight_idx_ref;
-
-    /// Mutex for Updating global gradient values
-    std::mutex & update_mtx;
 
     /// Amount of Delta Nodes
     const unsigned int delta_size;

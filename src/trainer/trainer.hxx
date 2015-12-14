@@ -34,70 +34,7 @@ void trainer<A,D>::operator()(std::vector<std::shared_ptr<pattern>> & patterns)
     // `Σ(O[j]*W[i])`: Dot product of previous layer output O[j] by Weight W[i]
     //                 Sum the dot product into a single vector (represents input Sum for layer [i])
     //  And then activate it: `σ'(Σ(I[j]*W[i]))`
-    {
-        // activate Input and move the activated output to `node_outputs`
-        auto dim = dim1D(ptr->input_size);
-        activate<A><<<dim.num_blocks_x,dim.block_threads_x>>>(_func,
-                                                              thrust::raw_pointer_cast(ptr->ideal_input.data()),
-                                                              thrust::raw_pointer_cast(ptr->node_outputs.data())
-                                                             );
-        unsigned int sums_index = 0;
-        unsigned int input_index = 0;
-
-        //Iterate layers
-        for (unsigned int k = 0; k < ptr->weight_idx_ref.size(); k++)
-        {
-            // Find layer's `node_size`
-            unsigned int input_size = 0;
-            unsigned int output_size = 0;
-            if (k == 0){
-                input_size = ptr->input_size;
-                output_size = ptr->n_per_hl;
-            }
-            else if (k == ptr->weight_idx_ref.size()-1){
-                input_size = ptr->n_per_hl;
-                output_size = ptr->output_size;
-            }
-            else {
-                input_size = ptr->n_per_hl;
-                output_size = ptr->n_per_hl;
-            }
-
-            unsigned int weights_in_layer = std::get<1>(ptr->weight_idx_ref[k]) - std::get<0>(ptr->weight_idx_ref[k]);
-            // width is the amount of weights per node = `# of weights in this layer` / `# of nodes in this layer`
-            unsigned int width = weights_in_layer / input_size;
-            unsigned int height = input_size;
-
-            // X grid = matrix rows / nodes in [j], Y grid = matrix columns / weights in [i]
-            auto dimA = dim2D(height,width);
-            dim3 tPB(dimA.block_threads_x,dimA.block_threads_y);
-            dim3 nB(dimA.num_blocks_x,dimA.num_blocks_y);
-
-            // `O[j] * W[ji]` : @weights, @input, @matrix output, @matrix width - use as input `ptr->node_outputs`
-            forward_prop<<<nB,tPB>>>( thrust::raw_pointer_cast(ptr->weight_ref.data()) + std::get<0>(ptr->weight_idx_ref[k]),
-                                      thrust::raw_pointer_cast(ptr->node_outputs.data()) + input_index,
-                                      thrust::raw_pointer_cast(ptr->fw_prop_mtx.data()),
-                                      width);
-            
-            // I[i] = `Σ(O[j]*W[i])` :  @matrix output, @node sums, @matrix height, @matrix width - save sums output
-            // Sum Matrix Columns Into a Row size of(Matrix width )
-            auto dB = dim1D(width);
-            sum_columns<<<dB.num_blocks_x,dB.block_threads_x>>>(thrust::raw_pointer_cast(ptr->fw_prop_mtx.data()),
-                                                                thrust::raw_pointer_cast(ptr->node_sums.data()) + sums_index,
-                                                                height,
-                                                                width);
-            // Update input_index
-            input_index += input_size;
-            
-            // Activate Sums Input I[i]: `σ(Σ(O[j]*W[i]))` - save node output - as `O[i]`
-            auto dC = dim1D(width);
-            activate<A><<<dC.num_blocks_x,dC.block_threads_x>>>(_func,
-                                                                thrust::raw_pointer_cast(ptr->node_sums.data()) + sums_index,
-                                                                thrust::raw_pointer_cast(ptr->node_outputs.data()) + input_index );
-            // Update Indexes
-            sums_index += output_size;
-        }
-    }
+    fw_propagate(ptr);
 
     // #2 Calculate the Primed value of node input sums for all layers
     primed_sums(ptr);
@@ -111,31 +48,77 @@ void trainer<A,D>::operator()(std::vector<std::shared_ptr<pattern>> & patterns)
     // #4 Calculate hidden node deltas
     hidden_node_delta(ptr);
 
-    // #5  Calculate the wieght gradients for the entire network
+    // #5 Calculate the wieght gradients for the entire network
     calc_weight_gradients(ptr);
 
-    // #6 Lock Mutex: Update Epoch Gradients & Epoch Errors
+    // #6 Square Errors
+    calc_squared_errors(ptr);
+}
+
+template <class A,class D>
+void trainer<A,D>::fw_propagate(const std::shared_ptr<pattern> & ptr)
+{
+    // activate Input and move the activated output to `node_outputs`
+    auto dim = dim1D(ptr->input_size);
+    activate<A><<<dim.num_blocks_x,dim.block_threads_x>>>(_func,
+                                                          thrust::raw_pointer_cast(ptr->ideal_input.data()),
+                                                          thrust::raw_pointer_cast(ptr->node_outputs.data())
+                                                         );
+    unsigned int sums_index = 0;
+    unsigned int input_index = 0;
+
+    //Iterate layers
+    for (unsigned int k = 0; k < ptr->weight_idx_ref.size(); k++)
     {
-        // Lock the update mutex and then do the updates
-        std::lock_guard<std::mutex> guard(ptr->update_mtx);
+        // Find layer's `node_size`
+        unsigned int input_size = 0;
+        unsigned int output_size = 0;
+        if (k == 0){
+            input_size = ptr->input_size;
+            output_size = ptr->n_per_hl;
+        }
+        else if (k == ptr->weight_idx_ref.size()-1){
+            input_size = ptr->n_per_hl;
+            output_size = ptr->output_size;
+        }
+        else {
+            input_size = ptr->n_per_hl;
+            output_size = ptr->n_per_hl;
+        }
 
-        // Sum the weight gradients (Batch Training): `Σ( ∂E/∂W[ik] )` - X: gradient index
-        auto d1 = dim1D(ptr->epoch_gradients.size());
-        sum_gradients<<<d1.num_blocks_x,d1.block_threads_x>>>(thrust::raw_pointer_cast(ptr->epoch_gradients.data()),
-                                                              thrust::raw_pointer_cast(ptr->gradients.data()) );
+        unsigned int weights_in_layer = std::get<1>(ptr->weight_idx_ref[k]) - std::get<0>(ptr->weight_idx_ref[k]);
+        // width is the amount of weights per node = `# of weights in this layer` / `# of nodes in this layer`
+        unsigned int width = weights_in_layer / input_size;
+        unsigned int height = input_size;
 
-        // Position of the actual output
-        unsigned int o_idx = ptr->node_outputs.size() - ptr->output_size;
-        // Index of the global epoch squared errors
-        unsigned int e_idx = ptr->output_size * _i;
+        // X grid = matrix rows / nodes in [j], Y grid = matrix columns / weights in [i]
+        auto dimA = dim2D(height,width);
+        dim3 tPB(dimA.block_threads_x,dimA.block_threads_y);
+        dim3 nB(dimA.num_blocks_x,dimA.num_blocks_y);
 
-        // Error = (Ideal - Actual)^2 for each Output node value 
-        // We won't lock access to the epoch errors, because we **should not** access other items only this pattern's array range
-        auto d2 = dim1D(ptr->output_size);
-        squared_error<<<d2.num_blocks_x,d2.block_threads_x>>>( thrust::raw_pointer_cast(ptr->ideal_output.data()),
-                                                               thrust::raw_pointer_cast(ptr->node_outputs.data()) + o_idx,
-                                                               thrust::raw_pointer_cast(ptr->epoch_errors.data()) + e_idx );
-        cudaDeviceSynchronize();
+        // `O[j] * W[ji]` : @weights, @input, @matrix output, @matrix width - use as input `ptr->node_outputs`
+        forward_prop<<<nB,tPB>>>( thrust::raw_pointer_cast(ptr->weight_ref.data()) + std::get<0>(ptr->weight_idx_ref[k]),
+                                  thrust::raw_pointer_cast(ptr->node_outputs.data()) + input_index,
+                                  thrust::raw_pointer_cast(ptr->fw_prop_mtx.data()),
+                                  width);
+        
+        // I[i] = `Σ(O[j]*W[i])` :  @matrix output, @node sums, @matrix height, @matrix width - save sums output
+        // Sum Matrix Columns Into a Row size of(Matrix width )
+        auto dB = dim1D(width);
+        sum_columns<<<dB.num_blocks_x,dB.block_threads_x>>>(thrust::raw_pointer_cast(ptr->fw_prop_mtx.data()),
+                                                            thrust::raw_pointer_cast(ptr->node_sums.data()) + sums_index,
+                                                            height,
+                                                            width);
+        // Update input_index
+        input_index += input_size;
+        
+        // Activate Sums Input I[i]: `σ(Σ(O[j]*W[i]))` - save node output - as `O[i]`
+        auto dC = dim1D(width);
+        activate<A><<<dC.num_blocks_x,dC.block_threads_x>>>(_func,
+                                                            thrust::raw_pointer_cast(ptr->node_sums.data()) + sums_index,
+                                                            thrust::raw_pointer_cast(ptr->node_outputs.data()) + input_index );
+        // Update Indexes
+        sums_index += output_size;
     }
 }
 
@@ -273,6 +256,10 @@ void trainer<A,D>::calc_weight_gradients(const std::shared_ptr<pattern> &ptr)
         delta_idx += node_deltas;
         output_idx += output_vals;
     }
+    // Sum the weight gradients (Batch Training): `Σ( ∂E/∂W[ik] )` - X: gradient index
+    auto d1 = dim1D(ptr->epoch_gradients.size());
+    sum_gradients<<<d1.num_blocks_x,d1.block_threads_x>>>(thrust::raw_pointer_cast(ptr->epoch_gradients.data()),
+                                                          thrust::raw_pointer_cast(ptr->gradients.data()) );
 }
 
 template <class A,class D>

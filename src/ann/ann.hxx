@@ -46,7 +46,7 @@ float ann::train (
                       cuANN::data & train_data,
                       unsigned int epochs,
                       unsigned int reports,
-                      unsigned int max_threads,
+                      unsigned int max_threads, // DEPRECATE
                       float stop_error,
                       float learning,
                       float momentum
@@ -63,11 +63,8 @@ float ann::train (
     thrust::device_vector<float> updates( weights_.size() );
     // Epoch Squared Errors: One for each Output Node * Patterns
     thrust::device_vector<float> errors(train_data.size()*train_data.output_size());
-    // Gradients and Errors Mutexes - one Thread per time
-    std::mutex rw_mutex;
     // trainer pattern data 
     std::vector<std::shared_ptr<pattern>> patterns;
-    // Reserve same as MAX_THREADs else we will be doing many copies
     patterns.reserve(train_data.size());
     // Allocate pattern objects on GPU memory
     // WARNING: I should check for available memory before actually creating a new `pattern` object!
@@ -75,34 +72,30 @@ float ann::train (
     {
         patterns.push_back( std::make_shared<pattern>( train_data[i].input, train_data[i].output,
                                                         weights_, gradients, errors, w_index_, 
-                                                        rw_mutex,
                                                         output_neurons_, input_neurons_, hidden_neurons_, per_layer_, 
                                                         i ));
     }
     cudaDeviceSynchronize();
 
-    // trainer thread pool - max_threads and pattern data
-    cuANN::trainer_pool thread_pool(max_threads,patterns);
-    thread_pool.start();
     float mse = 0.0;
     // Iterate epochs and compare mse
     int k = 0;
     for (int i = 0; i < epochs; i++)
     {
         // Run an epoch and get its MSE
-        mse = epoch(func,deriv,train_data.size(),thread_pool,gradients,updates,errors);
+        mse = epoch(func,deriv,train_data.size(),patterns,gradients,updates,errors);
         // Shuffle training data
         train_data.shuffle();
         // Report if needed
         if ( k == reports && k != 0 )
         {
-            std::cout << "Epoch "<< i << " MSE: " << mse  << std::endl;
+            std::cout << "Epoch " << i << " MSE: " << mse  << std::endl;
             k = 0;
+            //std::cout << "Test MSE: " << test(func,train_data) << std::endl;
         }
         k++;
         if (mse < stop_error) break;
     }
-    thread_pool.stop();
     return mse;
 }
 
@@ -141,7 +134,7 @@ float ann::epoch (
                    A const& func,
                    D const& deriv,
                    const unsigned int datasize,
-                   cuANN::trainer_pool & thread_pool,
+                   std::vector<std::shared_ptr<pattern>> & patterns,
                    thrust::device_vector<float> & gradients,
                    thrust::device_vector<float> & updates,
                    thrust::device_vector<float> & errors
@@ -157,11 +150,8 @@ float ann::epoch (
     {
         // create a `trainer` thread object for the `tread_pool` & submit it to the thread pool
         auto obj = cuANN::trainer<A,D>(func,deriv,i);
-        thread_pool.submit<A,D>(obj);
+        obj(patterns);
     }
-    // When all threads have finished, we can then update the weights and calculate the mean squared errors
-    thread_pool.wait();
-    cudaDeviceSynchronize();
     
     // Do back-prop here
     auto dim = dim1D( weights_.size() );
@@ -174,16 +164,7 @@ float ann::epoch (
     float sum = thrust::reduce(errors.begin(),errors.end());
     cudaDeviceSynchronize();
     float mse = sum / errors.size();
-   
-    /*
-    std::cout << "squared errors: ";
-    for (const auto & v : errors)
-        std::cout << v << " ";
-    std::cout << std::endl;
-    std::cout << "sum of squared errors: " << sum << std::endl;
-    std::cout << "datasize * output size: " << errors.size() << std::endl;
-    std::cout << "mse " << mse << std::endl;
-    */
+
     // Return Mean-Squared Errors
     return mse;
 }
