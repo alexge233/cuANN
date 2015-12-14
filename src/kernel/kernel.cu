@@ -141,8 +141,8 @@ __global__ void squared_error (
                             )
 {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
-    float diff = ideal[x] - actual[x];
-    errors[x] = diff * diff;
+    float diff = (ideal[x] - actual[x]);
+    errors[x] = diff * diff; 
     //printf("ideal: %f, actual: %f, diff: %f E²: %f\n",ideal[x],actual[x],diff,errors[x]);
 }
 

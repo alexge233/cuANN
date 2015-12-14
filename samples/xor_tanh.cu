@@ -32,30 +32,34 @@ int main (void)
     // the amount of CPU threads (each CPU thread "learns" a pattern)
     // the stop-error, e.g., when should the network stop learning
     // the learning rate, and the momentum rate.
-    float mse = net.train(func,deriv,train_data,10000,1000,1,.0001,.7,.1);
+    float mse = net.train(func,deriv,train_data,30000,1000,1,.0001,.7,.1);
+    cudaDeviceSynchronize();
 
     std::cout << "XOR network using tanh_norm back-prop MSE: " << mse << std::endl;
 
     // Lets do some manual Propagations and see what the Network Output is
     //
     std::cout << "test [1,0] as input; ";
-    float x_in1[2] {1, 0};
+    float x_in1[2] {1,0};
     thrust::device_vector<float> in_vec1(x_in1,x_in1+2);
     auto output1 = net.propagate( func, in_vec1 );
+    cudaDeviceSynchronize();
     std::cout << "output: ";
     for ( auto val : output1 ) std::cout << val << " (expecting 1)" << std::endl;
 
     std::cout << "test [0,1] as input; ";
-    float x_in2[2] {0, 1};
+    float x_in2[2] {0,1};
     thrust::device_vector<float> in_vec2(x_in2,x_in2+2);
     auto output2 = net.propagate( func, in_vec2 );
+    cudaDeviceSynchronize();
     std::cout << "output: ";
     for ( auto val : output2 ) std::cout << val << " (expecting 1)" << std::endl;
 
     std::cout << "test [0,0] as input; ";
-    float x_in3[2] {-1,-1};
+    float x_in3[2] {0,0};
     thrust::device_vector<float> in_vec3(x_in3,x_in3+2);
     auto output3 = net.propagate( func, in_vec3 );
+    cudaDeviceSynchronize();
     std::cout << "output: ";
     for ( auto val : output3 ) std::cout << val << " (expecting 0)" << std::endl;
 
@@ -63,6 +67,7 @@ int main (void)
     float x_in4[2] {1,1};
     thrust::device_vector<float> in_vec4(x_in4,x_in4+2);
     auto output4 = net.propagate( func, in_vec4 );
+    cudaDeviceSynchronize();
     std::cout << "output: ";
     for ( auto val : output4 ) std::cout << val << " (expecting 0)" << std::endl;
 

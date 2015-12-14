@@ -27,14 +27,17 @@ thrust::device_vector<float> ann::propagate (
 
         // Update Out to equal the propagation of previous out.
         auto sums = prop_layer( w_from, w_to, output );
+        cudaDeviceSynchronize();
 
         // Copy the sums as output
         output = sums;
         float * output_ptr = thrust::raw_pointer_cast( output.data() );
-
+        cudaDeviceSynchronize();
+        
         // Run the output through the activation function
         auto dimB = dim1D(output.size());
         activate<A><<<dimB.num_blocks_x,dimB.block_threads_x>>>(func,output_ptr);
+        cudaDeviceSynchronize();
     }
     return output;
 }
@@ -84,8 +87,7 @@ float ann::train (
     {
         // Run an epoch and get its MSE
         mse = epoch(func,deriv,train_data.size(),patterns,gradients,updates,errors);
-        // Shuffle training data
-        train_data.shuffle();
+
         // Report if needed
         if ( k == reports && k != 0 )
         {
@@ -145,10 +147,18 @@ float ann::epoch (
     thrust::fill(errors.begin(),errors.end(),0.f);
     cudaDeviceSynchronize();
 
-    // Iterate training set, spawning a thread for each pattern
-    for (unsigned int i = 0; i < datasize; i++)
+    // random pool of numbers from 0 ~ datasize
+    std::vector<int> rand_pool(datasize);
+    std::iota(rand_pool.begin(),rand_pool.end(),0);
+    // randomly shuffle
+    auto prng = std::default_random_engine{};
+    prng.seed( std::random_device{}() );
+    std::shuffle( std::begin(rand_pool), std::end(rand_pool), prng);
+
+    // at this point we're training on a randomly chosen pattern
+    for (unsigned int i = 0; i < rand_pool.size(); i++)
     {
-        // create a `trainer` thread object for the `tread_pool` & submit it to the thread pool
+        // Create a trainer and run it
         auto obj = cuANN::trainer<A,D>(func,deriv,i);
         obj(patterns);
     }
@@ -160,10 +170,19 @@ float ann::epoch (
                                                          thrust::raw_pointer_cast(updates.data()), 
                                                          alpha_, 
                                                          epsilon_);
-    // Sum squared errors for all patterns
-    float sum = thrust::reduce(errors.begin(),errors.end());
+    // Copy squared errors to host
+    thrust::host_vector<float> sq_errors(errors);
     cudaDeviceSynchronize();
-    float mse = sum / errors.size();
+    // Sum squared errors for all patterns
+    float sum = thrust::reduce(sq_errors.begin(),sq_errors.end());
+    float mse = sum / sq_errors.size();
+
+    /*
+    std::cout << "squared errors: ";
+    for (const auto & v : sq_errors)
+        std::cout << v << " ";
+    std::cout << std::endl << "MSE: " << mse << std::endl;
+    */
 
     // Return Mean-Squared Errors
     return mse;

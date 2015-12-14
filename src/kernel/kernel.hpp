@@ -5,7 +5,7 @@ namespace cuANN
 {
 
 /// Signum function, 1 if > 0, 0 if 0, -1 if < 0
-__device__ static float sgn(const float x)
+__device__ static inline float sgn(const float x)
 {
     return (0.f < x) - (x < 0.f);
 }  
@@ -14,7 +14,7 @@ __device__ static float sgn(const float x)
 struct sigmoid
 {
     sigmoid()=default;
-    __device__ float operator()(const float x) const
+    __device__ inline float operator()(const float x) const
     {
         return 1 / ( 1 + expf(-x) );
     }
@@ -24,7 +24,7 @@ struct sigmoid
 struct sigmoid_deriv
 {
     sigmoid_deriv()=default;
-    __device__ float operator()(const float x) const
+    __device__ inline float operator()(const float x) const
     {
         float sig = 1 / ( 1 + expf(-x) );
         return sig * ( 1 - sig );
@@ -34,7 +34,7 @@ struct sigmoid_deriv
 /// Sigmoid Bipolar: `σ(x) = -1 + 2 / (1 + e^-x)`
 struct sigmoid_bipolar
 {
-    __device__ float operator()(const float x) const
+    __device__ inline float operator()(const float x) const
     {
         return 1 / (1 + expf(-x));
     }
@@ -44,7 +44,7 @@ struct sigmoid_bipolar
 struct sigmoid_bipolar_deriv
 {
     sigmoid_bipolar_deriv()=default;
-    __device__ float operator()(const float x) const
+    __device__ inline float operator()(const float x) const
     {
         float sig   = 1 / (1 + expf(-x));
         float inner = (1 + sig) * (1 - sig);
@@ -56,20 +56,20 @@ struct sigmoid_bipolar_deriv
 struct tanh_norm
 {
     tanh_norm()=default;
-    __device__ float operator()(const float x) const
+    __device__ inline float operator()(const float x) const
     {
         return tanhf(x);
     }
 };
 
-/// Normal Hyperbolic Tangent Derivative: `1 / cosh^2(x)`
+/// Normal Hyperbolic Tangent Derivative: `1 - tanh^2(x)`
 struct tanh_norm_deriv
 {
     tanh_norm_deriv()=default;
-    __device__ float operator()(const float x) const
+    __device__ inline float operator()(const float x) const
     {
-        float cosh_x = coshf(x);
-        return 1/(cosh_x*cosh_x);
+        float tanh_x = tanhf(x);
+        return 1 - (tanh_x*tanh_x);
     }
 };
 
@@ -78,7 +78,7 @@ struct tanh_norm_deriv
 struct tanh_scaled
 {
     tanh_scaled()=default;
-    __device__ float operator()(const float x) const
+    __device__ inline float operator()(const float x) const
     {
         return 1.7159 * tanhf(0.666666667 * x);
     }
@@ -89,7 +89,7 @@ struct tanh_scaled
 struct tanh_scaled_deriv
 {
     tanh_scaled_deriv()=default;
-    __device__ float operator()(const float x) const
+    __device__ inline float operator()(const float x) const
     {
         float tanh_vl = tanhf(0.666666667 * x);
         return 0.38852303 * ((1.7159 - tanh_vl) * (1.7159 + tanh_vl));
@@ -100,7 +100,7 @@ struct tanh_scaled_deriv
 struct soft_sign
 {
     soft_sign()=default;
-    __device__ float operator()(const float x) const
+    __device__ inline float operator()(const float x) const
     {
         return x / (1 + fabsf(x));
     }
@@ -110,7 +110,7 @@ struct soft_sign
 struct soft_sign_deriv
 {
     soft_sign_deriv()=default;
-    __device__ float operator()(const float x) const
+    __device__ inline float operator()(const float x) const
     {
         float inner = 1 + fabsf(x);
         return sgn(x) / (inner * inner);
@@ -179,6 +179,7 @@ __global__ void delta_output (
 
 ///
 /// CUDA kernels for Testing a network
+/// >> Those can be moved to another file/folder from below this line
 ///
 
 /** 
@@ -298,7 +299,17 @@ __global__ void back_prop (
                             float epsilon
                          );
 
-// TODO: Resilient Back-Prop
+/**
+ * @brief Resilitent Back-Propagation for all weights: 
+ * TODO: ASAP
+ */
+__global__ void resilient_prop (
+                                  float * weight,
+                                  float * gradient,
+                                  float * update,
+                                  float * increase,
+                                  float * decrease
+                               );
 
 /// Calculate the Output Error: (Ideal[i] - Actual[i])²
 __global__ void squared_error ( 

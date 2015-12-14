@@ -43,12 +43,11 @@ int main ()
     // the stop-error, e.g., when should the network stop learning
     // the learning rate, and the momentum rate.
     auto mse = net.train(func,deriv,train_data,50000,100,20,.002,.2,.7);
-
+    cudaDeviceSynchronize();
     std::cout << "Abelone deep network using soft_sign back-prop MSE: " << mse << std::endl;
 
     cuANN::data test_data = cuANN::data("../data/abelone.test");
-    mse = net.test(func,test_data);
-    std::cout << "abelone network test MSE: " << mse << std::endl;
+    std::cout << "abelone network test MSE: " << net.test(func,test_data) << std::endl;
    
     // Save on disk
     std::cout << "saving abelone network on disk" << std::endl;

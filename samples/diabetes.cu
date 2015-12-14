@@ -7,9 +7,8 @@
 int main ()
 {
     // Instantiate the activation functor and its derivative
-    // For this Network we will use the Hyperbolic Tangent scaled between [-1,1] (see `src/kernel/kernel.hpp`)
-    cuANN::sigmoid func;
-    cuANN::sigmoid_deriv deriv;
+    cuANN::tanh_norm func;
+    cuANN::tanh_norm_deriv deriv;
 
     // Create the Neural Network
     // It must match the input size of the training data (see `data/diabetes.train`) and the output size.
@@ -25,7 +24,7 @@ int main ()
     // Due to the fact that the upper-bound rule for hidden nodes provides a very small number:
     // 384 / ( 5 * (8+2) ) = 7.68, we use one single hidden layer with 8 hidden nodes.
     //
-    // Remeber: more than one hidden layers, and the network starts to become "deep" thus you need to use soft-sign
+    // Remeber: more than one hidden layers, and the network starts to become "deep"
     //
     cuANN::ann net = cuANN::ann(8,6,1,2);
 
@@ -37,15 +36,14 @@ int main ()
     // the amount of CPU threads (each CPU thread "learns" a pattern)
     // the stop-error, e.g., when should the network stop learning
     // the learning rate, and the momentum rate.
-    float mse = net.train(func,deriv,train_data,100000,100,1,.002,.2,.7);
+    float mse = net.train(func,deriv,train_data,500000,100,1,.002,.7,.2);
 
     // Print MSE
     std::cout << "diabetes network trained MSE: " << mse << std::endl;
 
     // Test the Network with the "test" data-set
     cuANN::data test_data = cuANN::data("../data/diabetes.test");
-    mse = net.test(func,test_data);
-    std::cout << "diabetes network test MSE: " << mse << std::endl;
+    std::cout << "diabetes network test MSE: " << net.test(func,test_data) << std::endl;
    
     // Save on disk
     std::cout << "saving diabetes network on disk" << std::endl;
