@@ -6,6 +6,7 @@ __Notes__
 Deprecate entire code and re-write from scratch.
 All CUDA kernels can be re-written using CUDA >= 6.5 and made a lot faster
 Deprecate support for older CUDA/GPUs.
+Proper Weight indexing is required, either using an array of ints, or some other type.
       
 1. Use a Block Dimension and a 2D grid per block:
         - thread X per input/neuron/activity
