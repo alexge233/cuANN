@@ -1,24 +1,43 @@
+06.01.2017
+
+TODO: Deprecate entire code and re-write from scratch.
+      All CUDA kernels can be re-written using CUDA >= 6.5 and made a lot faster
+      Deprecate support for older CUDA/GPUs.
+      
+1. Use a Block Dimension and a 2D grid per block:
+        - thread X per input/neuron/activity
+        - thread Y per weight/layer
+        - for loop over layers within the kernel
+        - Block Dim X per training sample: Iterate over samples
+        
+2. Use read-only texture memory for training samples (cannot be changed/written)
+        - access is 2X faster
+        
+3. Use shared memory (local/dynamic) to store temporary matrices (e.g., Deltas or similar)
+        - prefer L1 over L2, and L2 over L3
+        
+4. Use multiple kernel calls, since CUDA 7.0 supports it:
+        - wrap epochs, training and propagating (back and forward) into single kernel
+        - avoid calling multiple kernels from Host
+
 11.12.2015
 
 TODO: [Version 0.3]
         
-        1. Implement Resilient-Back-Propagation.
-           Once complete, rename `train` to `train_backprop` and create a new `train_rprop` method.
-           Then, parametrise the `epoch` method to take as param either an ENUM, or a functor to the batch training method.
-           Read the paper (PDF) `Rprop.pdf` and see online bookmarks.
+1. Implement Resilient-Back-Propagation.
+   Once complete, rename `train` to `train_backprop` and create a new `train_rprop` method.
+   Then, parametrise the `epoch` method to take as param either an ENUM, or a functor to the batch training method.
+   Read the paper (PDF) `Rprop.pdf` and see online bookmarks.
+   A neat optimisation trick is to not zero-fill `delta_updates` at first, but to set them to 0.1.
 
-           A neat optimisation trick is to not zero-fill `delta_updates` at first, but to set them to 0.1.
+2. remove thread_pool: In almost all instances were I use CPU-MT, the GPU uses LESS %.
+   Completely remove the thread_pool, flatten code, remove boost::asio.
 
-        2. remove thread_pool: In almost all instances were I use CPU-MT, the GPU uses LESS %.
-           Completely remove the thread_pool, flatten code, remove boost::asio.
+3. Average Cross-Entropy Error. This may require changes to back_prop as the update rule slightly changes.
 
-        3. Average Cross-Entropy Error. This may require changes to back_prop as the update rule slightly changes.
-
-        4. Enable Output Regression (Soft-Max) to properly scale the output.
-
+4. Enable Output Regression (Soft-Max) to properly scale the output.
 
 NOTE: Profiling using nvprof was revealing: most time is spent allocating and copying memory.
       This needs to be addressed and fixed.
-
 NOTE: Running Version 0.2 using `diabetes` GPU usage is: 25%-30% and 307Mb/2Gb with Memory and PCIe usage 1~2%
       Therefore, v 0.2 did not maximise GPU utilisation.
