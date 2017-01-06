@@ -1,8 +1,11 @@
-06.01.2017
+TODO: [Version 0.3]
 
-TODO: Deprecate entire code and re-write from scratch.
-      All CUDA kernels can be re-written using CUDA >= 6.5 and made a lot faster
-      Deprecate support for older CUDA/GPUs.
+#06.01.2017
+
+__Notes__
+Deprecate entire code and re-write from scratch.
+All CUDA kernels can be re-written using CUDA >= 6.5 and made a lot faster
+Deprecate support for older CUDA/GPUs.
       
 1. Use a Block Dimension and a 2D grid per block:
         - thread X per input/neuron/activity
@@ -20,10 +23,8 @@ TODO: Deprecate entire code and re-write from scratch.
         - wrap epochs, training and propagating (back and forward) into single kernel
         - avoid calling multiple kernels from Host
 
-11.12.2015
-
-TODO: [Version 0.3]
-        
+#11.12.2015
+__Code__        
 1. Implement Resilient-Back-Propagation.
    Once complete, rename `train` to `train_backprop` and create a new `train_rprop` method.
    Then, parametrise the `epoch` method to take as param either an ENUM, or a functor to the batch training method.
