@@ -1,6 +1,8 @@
 # cuANN
 ## Artificial Neural Network for CUDA
 ### Version 0.2
+__warning__ this isn't working properly! It was a learning experiment on how to code with CUDA and how MLPN work.
+If I ever get to re-writting this, I will update the readme, otherwise use at your own peril!!!
 
 A simple Feed Forward Multilayered Neural Network, using CUDA and Thrust.
 I started working on this project, after I realised that (at the time of writting this) no
